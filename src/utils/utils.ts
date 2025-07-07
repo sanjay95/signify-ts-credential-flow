@@ -146,15 +146,15 @@ export async function initializeSignify() {
 /**
  * Creates a new SignifyClient instance, boots it, and connects to the KERIA agent.
  *
- * @returns {Promise<{ client: SignifyClient; bran: string; clientState: State }>}
- * The initialized client, its bran, and state.
+ * @returns {Promise<{ client: SignifyClient; clientState: State }>}
+ * The initialized client and state.
  */
 export async function initializeAndConnectClient(
   bran: string,
   adminUrl: string = DEFAULT_ADMIN_URL,
   bootUrl: string = DEFAULT_BOOT_URL,
   tier: Tier = Tier.low
-): Promise<{ client: SignifyClient; clientState: State }> {
+): Promise<{ client: SignifyClient; clientState: any }> {
   console.log(`Using Passcode (bran): ${bran}`);
 
   const client = new SignifyClient(adminUrl, bran, tier, bootUrl);
@@ -178,17 +178,12 @@ export async function initializeAndConnectClient(
 
 /**
  * Creates a new AID using the provided client.
- *
- * @param {SignifyClient} client - The initialized SignifyClient.
- * @param {string} alias - A human-readable alias for the AID.
- * @param {CreateIdentiferArgs} [identifierArgs=DEFAULT_IDENTIFIER_ARGS] - Configuration for the new AID.
- * @returns {Promise<{ aid: any; operation: Operation<T> }>} The created AID's inception event and the operation details.
  */
 export async function createNewAID(
   client: SignifyClient,
   alias: string,
   identifierArgs: CreateIdentiferArgs = DEFAULT_IDENTIFIER_ARGS
-): Promise<{ aid: any; operation: Operation<T> }> {
+): Promise<{ aid: any; operation: Operation<any> }> {
   console.log(`Initiating AID inception for alias: ${alias}`);
   try {
     const inceptionResult = await client
@@ -198,7 +193,7 @@ export async function createNewAID(
 
     const completedOperation = await client
       .operations()
-      .wait(operationDetails, AbortSignal.timeout(DEFAULT_TIMEOUT_MS));
+      .wait(operationDetails, { signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS) });
 
     if (completedOperation.error) {
       throw new Error(
@@ -222,14 +217,12 @@ export async function createNewAID(
 
 /**
  * Assigns an end role for a given AID to the client's KERIA Agent AID.
- *
- * @returns {Promise<{ operation: Operation<T> }>} The operation details.
  */
 export async function addEndRoleForAID(
   client: SignifyClient,
   aidAlias: string,
   role: string
-): Promise<{ operation: Operation<T> }> {
+): Promise<{ operation: Operation<any> }> {
   if (!client.agent?.pre) {
     throw new Error("Client agent prefix is not available.");
   }
@@ -247,7 +240,7 @@ export async function addEndRoleForAID(
 
     const completedOperation = await client
       .operations()
-      .wait(operationDetails, AbortSignal.timeout(DEFAULT_TIMEOUT_MS));
+      .wait(operationDetails, { signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS) });
 
     console.log(
       `Successfully assigned '${role}' role for AID alias ${aidAlias}.`
@@ -263,44 +256,13 @@ export async function addEndRoleForAID(
 }
 
 /**
- * Generates an OOBI URL for a given AID and role.
- * The arguments for client.oobis().get() are passed directly.
- *
- * @returns {Promise<string>} The generated OOBI URL.
- */
-export async function generateOOBI(
-  client: SignifyClient,
-  aidAlias: string,
-  role: string = "agent"
-): Promise<string> {
-  console.log(`Generating OOBI for AID alias ${aidAlias} with role ${role}`);
-  try {
-    const oobiResult = await client.oobis().get(aidAlias, role);
-    if (!oobiResult?.oobis?.length) {
-      throw new Error("No OOBI URL returned from KERIA agent.");
-    }
-    const oobiUrl = oobiResult.oobis[0];
-    console.log(`Generated OOBI URL: ${oobiUrl}`);
-    return oobiUrl;
-  } catch (error) {
-    console.error(
-      `Failed to generate OOBI for AID alias "${aidAlias}":`,
-      error
-    );
-    throw error;
-  }
-}
-
-/**
  * Resolves an OOBI URL
- *
- * @returns {Promise<{ operation: Operation<T>; contacts?: Contact[] }>} The operation details and the resolved contact.
  */
 export async function resolveOOBI(
   client: SignifyClient,
   oobiUrl: string,
   contactAlias?: string
-): Promise<{ operation: Operation<T>; contacts?: Contact[] }> {
+): Promise<{ operation: Operation<any>; contacts?: Contact[] }> {
   console.log(`Resolving OOBI URL: ${oobiUrl} with alias ${contactAlias}`);
   try {
     const resolveOperationDetails = await client
@@ -308,7 +270,7 @@ export async function resolveOOBI(
       .resolve(oobiUrl, contactAlias);
     const completedOperation = await client
       .operations()
-      .wait(resolveOperationDetails, AbortSignal.timeout(DEFAULT_TIMEOUT_MS));
+      .wait(resolveOperationDetails, { signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS) });
 
     if (completedOperation.error) {
       throw new Error(
@@ -320,11 +282,11 @@ export async function resolveOOBI(
       completedOperation.response ? "OK" : "No response data"
     );
 
-    const contact = await client
+    const contacts = await client
       .contacts()
       .list(undefined, "alias", contactAlias);
 
-    if (contact) {
+    if (contacts) {
       console.log(`Contact "${contactAlias}" added/updated.`);
     } else {
       console.warn(
@@ -334,7 +296,7 @@ export async function resolveOOBI(
 
     await client.operations().delete(completedOperation.name);
 
-    return { operation: completedOperation, contact: contact };
+    return { operation: completedOperation, contacts: contacts };
   } catch (error) {
     console.error(`Failed to resolve OOBI URL "${oobiUrl}":`, error);
     throw error;
@@ -342,68 +304,13 @@ export async function resolveOOBI(
 }
 
 /**
- * Generates challenge words for authentication.
- * @param {SignifyClient} client - The SignifyClient instance.
- * @param {number} [strength=128] - The bit strength for the challenge (e.g., 128, 256).
- * @returns {Promise<string[]>} A promise that resolves to an array of challenge words.
- */
-export async function generateChallengeWords(
-  client: SignifyClient,
-  strength: number = 128
-): Promise<string[]> {
-  console.log(`Generating ${strength}-bit challenge words...`);
-  try {
-    const challenge = await client.challenges().generate(strength);
-    console.log("Generated challenge words:", challenge.words);
-    return challenge.words;
-  } catch (error) {
-    console.error("Failed to generate challenge words:", error);
-    throw error;
-  }
-}
-
-/**
- * Responds to a challenge by signing the words and sending them to the challenger.
- * @param {SignifyClient} client - The SignifyClient instance of the responder.
- * @param {string} sourceAidAlias - The alias of the AID that is responding (signing).
- * @param {string} recipientAidPrefix - The AID prefix of the challenger (to whom the response is sent).
- * @param {string[]} challengeWords - The array of challenge words to sign.
- * @returns {Promise<void>} A promise that resolves when the response is sent.
- */
-export async function respondToChallenge(
-  client: SignifyClient,
-  sourceAidAlias: string,
-  recipientAidPrefix: string,
-  challengeWords: string[]
-): Promise<void> {
-  console.log(
-    `AID alias '${sourceAidAlias}' responding to challenge from AID '${recipientAidPrefix}'...`
-  );
-  try {
-    await client
-      .challenges()
-      .respond(sourceAidAlias, recipientAidPrefix, challengeWords);
-    console.log("Challenge response sent.");
-  } catch (error) {
-    console.error("Failed to respond to challenge:", error);
-    throw error;
-  }
-}
-
-/**
  * Verifies a challenge response received from another AID.
- * @param {SignifyClient} client - The SignifyClient instance of the verifier.
- * @param {string} allegedSenderAidPrefix - The AID prefix of the AID that allegedly sent the response.
- * @param {string[]} originalChallengeWords - The original challenge words that were sent.
- * @returns {Promise<{ verified: boolean; said?: string; operation?: Operation<T> }>}
- * A promise that resolves to an object indicating if verification was successful,
- * the SAID of the signed exchange message, and the operation details.
  */
 export async function verifyChallengeResponse(
   client: SignifyClient,
   allegedSenderAidPrefix: string,
   originalChallengeWords: string[]
-): Promise<{ verified: boolean; said?: string; operation?: Operation<T> }> {
+): Promise<{ verified: boolean; said?: string; operation?: Operation<any> }> {
   console.log(
     `Verifying challenge response from AID '${allegedSenderAidPrefix}'...`
   );
@@ -413,7 +320,7 @@ export async function verifyChallengeResponse(
       .verify(allegedSenderAidPrefix, originalChallengeWords);
     const completedOperation = await client
       .operations()
-      .wait(verifyOperation, AbortSignal.timeout(DEFAULT_TIMEOUT_MS));
+      .wait(verifyOperation, { signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS) });
 
     if (completedOperation.error) {
       console.error("Challenge verification failed:", completedOperation.error);
@@ -421,7 +328,7 @@ export async function verifyChallengeResponse(
       return { verified: false, operation: completedOperation };
     }
 
-    const said = completedOperation.response?.exn?.d;
+    const said = (completedOperation.response as any)?.exn?.d;
     console.log(
       `Challenge response verified successfully. SAID of exn: ${said}`
     );
@@ -436,43 +343,7 @@ export async function verifyChallengeResponse(
 }
 
 /**
- * Marks a challenge for a contact as authenticated.
- * This is done after successful verification of a challenge response.
- * @param {SignifyClient} client - The SignifyClient instance.
- * @param {string} contactAidPrefix - The AID prefix of the contact to mark as authenticated.
- * @param {string} signedChallengeSaid - The SAID of the signed challenge exchange message (exn).
- * @returns {Promise<void>} A promise that resolves when the contact is marked.
- */
-export async function markChallengeAuthenticated(
-  client: SignifyClient,
-  contactAidPrefix: string,
-  signedChallengeSaid: string
-): Promise<void> {
-  console.log(
-    `Marking challenge for contact AID '${contactAidPrefix}' as authenticated with SAID '${signedChallengeSaid}'...`
-  );
-  try {
-    await client.challenges().responded(contactAidPrefix, signedChallengeSaid);
-    console.log(`Contact AID '${contactAidPrefix}' marked as authenticated.`);
-  } catch (error) {
-    console.error(
-      `Failed to mark challenge as authenticated for contact AID '${contactAidPrefix}':`,
-      error
-    );
-    throw error;
-  }
-}
-
-export function createTimestamp() {
-  return new Date().toISOString().replace("Z", "000+00:00");
-}
-
-/**
  * Creates a new credential registry for an AID.
- * @param {SignifyClient} client - The SignifyClient instance.
- * @param {string} aidAlias - The alias of the AID creating the registry.
- * @param {string} registryName - A human-readable name for the registry.
- * @returns {Promise<{ registry: any; operation: Operation<any> }>} The created registry details and operation.
  */
 export async function createCredentialRegistry(
   client: SignifyClient,
@@ -490,7 +361,7 @@ export async function createCredentialRegistry(
     const operationDetails = await createRegistryResult.op();
     const completedOperation = await client
       .operations()
-      .wait(operationDetails, AbortSignal.timeout(DEFAULT_TIMEOUT_MS));
+      .wait(operationDetails, { signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS) });
 
     if (completedOperation.error) {
       throw new Error(
@@ -500,7 +371,7 @@ export async function createCredentialRegistry(
       );
     }
 
-    const registrySaid = completedOperation?.response?.anchor?.i;
+    const registrySaid = (completedOperation?.response as any)?.anchor?.i;
     console.log(`Successfully created credential registry: ${registrySaid}`);
 
     await client.operations().delete(completedOperation.name);
@@ -515,35 +386,7 @@ export async function createCredentialRegistry(
 }
 
 /**
- * Retrieves a schema by its SAID.
- * @param {SignifyClient} client - The SignifyClient instance.
- * @param {string} schemaSaid - The SAID of the schema to retrieve.
- * @returns {Promise<any>} The schema object.
- */
-export async function getSchema(
-  client: SignifyClient,
-  schemaSaid: string
-): Promise<any> {
-  console.log(`Retrieving schema with SAID: ${schemaSaid}...`);
-  try {
-    const schema = await client.schemas().get(schemaSaid);
-    console.log(`Successfully retrieved schema: ${schemaSaid}`);
-    return schema;
-  } catch (error) {
-    console.error(`Failed to retrieve schema "${schemaSaid}":`, error);
-    throw error;
-  }
-}
-
-/**
  * Issues a new credential.
- * @param {SignifyClient} client - The SignifyClient instance.
- * @param {string} issuerAidAlias - The alias of the issuing AID.
- * @param {string} registryIdentifier - The identifier (regk) of the registry.
- * @param {string} schemaSaid - The SAID of the credential's schema.
- * @param {string} holderAidPrefix - The prefix of the AID to whom the credential will be issued.
- * @param {any} credentialClaims - The claims/attributes of the credential.
- * @returns {Promise<{ credentialSad: any; credentialSaid: string; operation: Operation<any> }>} The issued credential's SAD, SAID, and operation.
  */
 export async function issueCredential(
   client: SignifyClient,
@@ -575,7 +418,7 @@ export async function issueCredential(
     const operationDetails = await issueResult.op;
     const completedOperation = await client
       .operations()
-      .wait(operationDetails, AbortSignal.timeout(DEFAULT_TIMEOUT_MS));
+      .wait(operationDetails, { signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS) });
 
     if (completedOperation.error) {
       throw new Error(
@@ -586,7 +429,7 @@ export async function issueCredential(
     }
     console.log(completedOperation); // ************
     const credentialSad = completedOperation.response; // The full Self-Addressing Data (SAD) of the credential
-    const credentialSaid = credentialSad?.ced?.d; // The SAID of the credential
+    const credentialSaid = (credentialSad as any)?.ced?.d; // The SAID of the credential
     console.log(`Successfully issued credential with SAID: ${credentialSaid}`);
 
     await client.operations().delete(completedOperation.name);
@@ -599,11 +442,6 @@ export async function issueCredential(
 
 /**
  * Submits an IPEX grant for a credential.
- * @param {SignifyClient} client - The SignifyClient instance of the issuer.
- * @param {string} senderAidAlias - The alias of the AID granting the credential.
- * @param {string} recipientAidPrefix - The AID prefix of the recipient (holder).
- * @param {any} acdc - The ACDC (credential).
- * @returns {Promise<{ operation: Operation<any> }>} The operation details.
  */
 export async function ipexGrantCredential(
   client: SignifyClient,
@@ -633,7 +471,7 @@ export async function ipexGrantCredential(
       .operations()
       .wait(
         submitGrantOperationDetails,
-        AbortSignal.timeout(DEFAULT_TIMEOUT_MS)
+        { signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS) }
       );
 
     if (completedOperation.error) {
@@ -656,205 +494,7 @@ export async function ipexGrantCredential(
 }
 
 /**
- * Retrieves the state of a credential.
- * Includes retry logic as this might be called before the information has propagated.
- * @param {SignifyClient} client - The SignifyClient instance.
- * @param {string} registryIdentifier - The registry identifier (regk).
- * @param {string} credentialSaid - The SAID of the credential.
- * @param {number} [retries=DEFAULT_RETRIES] - Number of retry attempts.
- * @param {number} [delayMs=DEFAULT_DELAY_MS] - Delay between retries in milliseconds.
- * @returns {Promise<any>} The credential state.
- */
-export async function getCredentialState(
-  client: SignifyClient,
-  registryIdentifier: string,
-  credentialSaid: string,
-  retries: number = DEFAULT_RETRIES,
-  delayMs: number = DEFAULT_DELAY_MS
-): Promise<any> {
-  console.log(
-    `Querying credential state for SAID "${credentialSaid}" in registry "${registryIdentifier}"...`
-  );
-  for (let attempt = 1; attempt <= retries; attempt++) {
-    try {
-      const credentialState = await client
-        .credentials()
-        .state(registryIdentifier, credentialSaid);
-      console.log("Successfully retrieved credential state.");
-      return credentialState;
-    } catch (error: any) {
-      console.warn(
-        `[Attempt ${attempt}/${retries}] Failed to get credential state: ${error.message}`
-      );
-      if (attempt === retries) {
-        console.error(
-          `Max retries (${retries}) reached for getting credential state.`
-        );
-        throw error;
-      }
-      await new Promise((resolve) => setTimeout(resolve, delayMs));
-    }
-  }
-  // Should not be reached if retries > 0
-  throw new Error("Failed to get credential state after all retries.");
-}
-
-/**
- * Waits for and retrieves a specific notification.
- * @param {SignifyClient} client - The SignifyClient instance.
- * @param {string} expectedRoute - The expected route in the notification attributes (e.g., IPEX_GRANT_ROUTE).
- * @param {number} [retries=DEFAULT_RETRIES] - Number of retry attempts.
- * @param {number} [delayMs=DEFAULT_DELAY_MS] - Delay between retries in milliseconds.
- * @returns {Promise<any>} The first matching unread notification.
- */
-export async function waitForAndGetNotification(
-  client: SignifyClient,
-  expectedRoute: string,
-  retries: number = DEFAULT_RETRIES,
-  delayMs: number = DEFAULT_DELAY_MS
-): Promise<any> {
-  console.log(`Waiting for notification with route "${expectedRoute}"...`);
-
-  let notifications;
-
-  // Retry loop to fetch notifications.
-  for (let attempt = 1; attempt <= DEFAULT_RETRIES; attempt++) {
-    try {
-      // List notifications, filtering for unread IPEX_GRANT_ROUTE messages.
-      let allNotifications = await client.notifications().list();
-      notifications = allNotifications.notes.filter(
-        (n) => n.a.r === expectedRoute && n.r === false // n.r is 'read' status
-      );
-      if (notifications.length === 0) {
-        throw new Error("Notification not found yet."); // Throw error to trigger retry
-      }
-      return notifications;
-    } catch (error) {
-      console.log(
-        `[Retry] Grant notification not found on attempt #${attempt} of ${DEFAULT_RETRIES}`
-      );
-      if (attempt === DEFAULT_RETRIES) {
-        console.error(
-          `[Retry] Max retries (${DEFAULT_RETRIES}) reached for grant notification.`
-        );
-        throw error;
-      }
-      console.log(
-        `[Retry] Waiting ${DEFAULT_DELAY_MS}ms before next attempt...`
-      );
-      await new Promise((resolve) => setTimeout(resolve, DEFAULT_DELAY_MS));
-    }
-  }
-}
-
-/**
- * Submits an IPEX admit (accepts a grant).
- * @param {SignifyClient} client - The SignifyClient instance of the holder.
- * @param {string} senderAidAlias - The alias of the AID admitting the grant.
- * @param {string} recipientAidPrefix - The AID prefix of the original grantor.
- * @param {string} grantSaid - The SAID of the grant being admitted.
- * @param {string} [message=''] - Optional message for the admit.
- * @returns {Promise<{ operation: Operation<any> }>} The operation details.
- */
-export async function ipexAdmitGrant(
-  client: SignifyClient,
-  senderAidAlias: string,
-  recipientAidPrefix: string,
-  grantSaid: string,
-  message: string = ""
-): Promise<{ operation: Operation<any> }> {
-  console.log(
-    `AID "${senderAidAlias}" admitting IPEX grant "${grantSaid}" from AID "${recipientAidPrefix}"...`
-  );
-  try {
-    const [admit, sigs, aend] = await client.ipex().admit({
-      senderName: senderAidAlias,
-      message: message,
-      grantSaid: grantSaid,
-      recipient: recipientAidPrefix,
-      datetime: createTimestamp(),
-    });
-
-    const admitOperationDetails = await client
-      .ipex()
-      .submitAdmit(senderAidAlias, admit, sigs, aend, [recipientAidPrefix]);
-
-    const completedOperation = await client
-      .operations()
-      .wait(admitOperationDetails, AbortSignal.timeout(DEFAULT_TIMEOUT_MS));
-
-    if (completedOperation.error) {
-      throw new Error(
-        `IPEX admit submission failed: ${JSON.stringify(
-          completedOperation.error
-        )}`
-      );
-    }
-    console.log(`Successfully submitted IPEX admit for grant "${grantSaid}".`);
-    await client.operations().delete(completedOperation.name);
-    return { operation: completedOperation };
-  } catch (error) {
-    console.error("Failed to submit IPEX admit:", error);
-    throw error;
-  }
-}
-
-/**
- * Marks a notification as read.
- * @param {SignifyClient} client - The SignifyClient instance.
- * @param {string} notificationId - The ID of the notification to mark.
- * @returns {Promise<void>}
- */
-export async function markNotificationRead(
-  client: SignifyClient,
-  notificationId: string
-): Promise<void> {
-  console.log(`Marking notification "${notificationId}" as read...`);
-  try {
-    await client.notifications().mark(notificationId);
-    console.log(`Notification "${notificationId}" marked as read.`);
-  } catch (error) {
-    console.error(
-      `Failed to mark notification "${notificationId}" as read:`,
-      error
-    );
-    throw error;
-  }
-}
-
-/**
- * Deletes a notification.
- * @param {SignifyClient} client - The SignifyClient instance.
- * @param {string} notificationId - The ID of the notification to delete.
- * @returns {Promise<void>}
- */
-export async function deleteNotification(
-  client: SignifyClient,
-  notificationId: string
-): Promise<void> {
-  console.log(`Deleting notification "${notificationId}"...`);
-  try {
-    await client.notifications().delete(notificationId);
-    console.log(`Notification "${notificationId}" deleted.`);
-  } catch (error) {
-    console.error(`Failed to delete notification "${notificationId}":`, error);
-    throw error;
-  }
-}
-
-//--------------------------------------------------------------------------------
-
-// --- Credential Presentation Functions ---
-
-/**
  * Submits an IPEX apply (presentation request).
- * @param {SignifyClient} client - The SignifyClient instance of the verifier.
- * @param {string} senderAidAlias - The alias of the AID applying for presentation.
- * @param {string} recipientAidPrefix - The AID prefix of the holder.
- * @param {string} schemaSaid - The SAID of the schema being requested.
- * @param {any} attributes - The attributes being requested for the credential.
- * @param {string} datetime - The timestamp for the apply.
- * @returns {Promise<{ operation: Operation<any>; applySaid: string }>} The operation details and SAID of the apply exn.
  */
 export async function ipexApplyForCredential(
   client: SignifyClient,
@@ -876,7 +516,7 @@ export async function ipexApplyForCredential(
       datetime: datetime,
     });
 
-    const applySaid = new Serder(apply).said; // Get SAID of the apply message itself
+    const applySaid = (new Serder(apply) as any).said; // Get SAID of the apply message itself
 
     const applyOperationDetails = await client
       .ipex()
@@ -884,7 +524,7 @@ export async function ipexApplyForCredential(
 
     const completedOperation = await client
       .operations()
-      .wait(applyOperationDetails, AbortSignal.timeout(DEFAULT_TIMEOUT_MS));
+      .wait(applyOperationDetails, { signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS) });
 
     if (completedOperation.error) {
       throw new Error(
@@ -903,35 +543,7 @@ export async function ipexApplyForCredential(
 }
 
 /**
- * Finds matching credentials based on a filter.
- * @param {SignifyClient} client - The SignifyClient instance of the holder.
- * @param {any} filter - The filter object to apply (e.g., { '-s': schemaSaid, '-a-attributeName': value }).
- * @returns {Promise<any[]>} An array of matching credentials.
- */
-export async function findMatchingCredentials(
-  client: SignifyClient,
-  filter: any
-): Promise<any[]> {
-  console.log("Finding matching credentials with filter:", filter);
-  try {
-    const matchingCredentials = await client.credentials().list({ filter });
-    console.log(`Found ${matchingCredentials.length} matching credentials.`);
-    return matchingCredentials;
-  } catch (error) {
-    console.error("Failed to find matching credentials:", error);
-    throw error;
-  }
-}
-
-/**
  * Submits an IPEX offer (presents a credential).
- * @param {SignifyClient} client - The SignifyClient instance of the holder.
- * @param {string} senderAidAlias - The alias of the AID offering the credential.
- * @param {string} recipientAidPrefix - The AID prefix of the verifier.
- * @param {any} acdcSad - The Self-Addressing Data (SAD) of the ACDC being offered.
- * @param {string} applySaid - The SAID of the IPEX apply message this offer is responding to.
- * @param {string} datetime - The timestamp for the offer.
- * @returns {Promise<{ operation: Operation<any> }>} The operation details.
  */
 export async function ipexOfferCredential(
   client: SignifyClient,
@@ -959,7 +571,7 @@ export async function ipexOfferCredential(
 
     const completedOperation = await client
       .operations()
-      .wait(offerOperationDetails, AbortSignal.timeout(DEFAULT_TIMEOUT_MS));
+      .wait(offerOperationDetails, { signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS) });
 
     if (completedOperation.error) {
       throw new Error(
@@ -981,12 +593,6 @@ export async function ipexOfferCredential(
 
 /**
  * Submits an IPEX agree (verifier agrees to the offered credential).
- * @param {SignifyClient} client - The SignifyClient instance of the verifier.
- * @param {string} senderAidAlias - The alias of the AID agreeing to the offer.
- * @param {string} recipientAidPrefix - The AID prefix of the holder who made the offer.
- * @param {string} offerSaid - The SAID of the IPEX offer message being agreed to.
- * @param {string} datetime - The timestamp for the agree.
- * @returns {Promise<{ operation: Operation<any> }>} The operation details.
  */
 export async function ipexAgreeToOffer(
   client: SignifyClient,
@@ -1012,7 +618,7 @@ export async function ipexAgreeToOffer(
 
     const completedOperation = await client
       .operations()
-      .wait(agreeOperationDetails, AbortSignal.timeout(DEFAULT_TIMEOUT_MS));
+      .wait(agreeOperationDetails, { signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS) });
 
     if (completedOperation.error) {
       throw new Error(
@@ -1030,7 +636,6 @@ export async function ipexAgreeToOffer(
   }
 }
 
-// --- Example Usage ---
 export async function test() {
   try {
     await initializeSignify();
@@ -1040,7 +645,7 @@ export async function test() {
     const { client: clientA, clientState: clientAState } =
       await initializeAndConnectClient(randomPasscode());
     const alfredClientAID =
-      clientAState?.controller?.state?.i || "Unknown Client AID A";
+      (clientAState as any)?.controller?.state?.i || "Unknown Client AID A";
     const aidAAlias = "alfredPrimaryAID";
     console.log("\n--- Creating AID for Alfred ---");
     const { aid: aidAObj } = await createNewAID(
@@ -1060,7 +665,7 @@ export async function test() {
     const { client: clientB, clientState: clientBState } =
       await initializeAndConnectClient(randomPasscode());
     const bettyClientAID =
-      clientBState?.controller?.state?.i || "Unknown Client AID B";
+      (clientBState as any)?.controller?.state?.i || "Unknown Client AID B";
     const aidBAlias = "bettyPrimaryAID";
     console.log("\n--- Creating AID for Betty ---");
     const { aid: aidBObj } = await createNewAID(
