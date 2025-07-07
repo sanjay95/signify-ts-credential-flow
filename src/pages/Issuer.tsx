@@ -109,7 +109,6 @@ const Issuer = () => {
     eventName: "GLEIF Summit",
     accessLevel: "staff",
     validDate: "2026-10-01",
-    holderAID: "",
   });
   const [holderAid, setHolderAid] = useState("");
 
@@ -196,60 +195,55 @@ const Issuer = () => {
   const handleIssueCredential = async () => {
     setIsProcessing(true);
     console.log("issuing credential to holder");
-    if (!holderAid) {
-      toast({
-        title: "Error",
-        description: "Holder AID is required to issue a credential",
-        variant: "destructive",
-      });
-      setIsProcessing(false);
-      return;
-    }
-    const { credentialSaid: credentialSaid } = await issueCredential(
-      issuerClient,
-      issuerData.issuerAid,
-      issuerData.registrySaid,
-      schemaSaid,
-      holderAid,
-      credentialData
-    );
+    try {
+      if (!holderAid) {
+        toast({
+          title: "Error",
+          description: "Holder AID is required to issue a credential",
+          variant: "destructive",
+        });
+        setIsProcessing(false);
+        return;
+      }
+      const { credentialSaid: credentialSaid } = await issueCredential(
+        issuerClient,
+        issuerData.issuerAid,
+        issuerData.registrySaid,
+        schemaSaid,
+        holderAid,
+        credentialData
+      );
 
-    console.log("Credential issued with SAID:", credentialSaid);
-    const credential = await issuerClient.credentials().get(credentialSaid);
+      console.log("Credential issued with SAID:", credentialSaid);
+      const credential = await issuerClient.credentials().get(credentialSaid);
 
-    console.log("Credential details:", credential);
-    console.log("granting credential to holder");
-    const grantResponse = await ipexGrantCredential(
-      issuerClient,
-      issuerData.alias,
-      holderAid,
-      credential
-    );
+      console.log("Credential details:", credential);
+      console.log("granting credential to holder");
+      const grantResponse = await ipexGrantCredential(
+        issuerClient,
+        issuerData.alias,
+        holderAid,
+        credential
+      );
 
-    console.log("Issuer created and granted credential.");
+      console.log("Issuer created and granted credential.");
 
-    setTimeout(() => {
-      const newCredential = {
-        id: `cred-${Date.now()}`,
-        said: `E${Math.random().toString(36).substring(2, 15).toUpperCase()}`,
-        status: "issued",
-        holder: credentialData.holderAID,
-        issuedDate: new Date().toISOString().split("T")[0],
-        claims: {
-          eventName: credentialData.eventName,
-          accessLevel: credentialData.accessLevel,
-          validDate: credentialData.validDate,
-        },
-      };
-
-      setCredentials([...credentials, newCredential]);
       setIsProcessing(false);
       toast({
         title: "Credential Issued",
         description:
           "ACDC credential has been successfully created and granted to holder",
       });
-    }, 3000);
+    } catch (error) {
+      console.error("Error issuing credential:", error);
+      setIsProcessing(false);
+      toast({
+        title: "ERROR",
+        description: "Failed to issue credential",
+      });
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   const handleRevokeCredential = async (credentialId: string) => {
