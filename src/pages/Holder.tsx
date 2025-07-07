@@ -20,6 +20,8 @@ import {
   Send,
   Eye,
   CheckCircle,
+  RefreshCw,
+  Clock,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { randomPasscode, Serder } from "signify-ts";
@@ -51,7 +53,6 @@ import {
   SCHEMA_SERVER_HOST,
 } from "../utils/utils";
 import { getItem, setItem } from "@/utils/db";
-import { set } from "date-fns";
 
 const Holder = () => {
   const navigate = useNavigate();
@@ -59,6 +60,7 @@ const Holder = () => {
   const { toast } = useToast();
   const [isConnected, setIsConnected] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isCheckingIncoming, setIsCheckingIncoming] = useState(false);
 
   const [holderData, setHolderData] = useState({
     alias: "holderAid",
@@ -68,6 +70,8 @@ const Holder = () => {
     holderBran: "",
   });
   const [holderClient, setHolderClient] = useState(null);
+
+  const [incomingCredentials, setIncomingCredentials] = useState([]);
 
   useEffect(() => {
     const loadData = async () => {
@@ -84,6 +88,18 @@ const Holder = () => {
       setItem("holder-data", holderData);
     }
   }, [holderData]);
+
+  // Auto-check for incoming credentials when connected
+  useEffect(() => {
+    if (isConnected && holderClient) {
+      checkIncomingCredentials();
+      // Set up periodic checking every 30 seconds
+      const interval = setInterval(() => {
+        checkIncomingCredentials();
+      }, 30000);
+      return () => clearInterval(interval);
+    }
+  }, [isConnected, holderClient]);
 
   const [credentials, setCredentials] = useState([
     {
@@ -159,6 +175,99 @@ const Holder = () => {
       setIsProcessing(false);
     }
   };
+
+  const checkIncomingCredentials = async () => {
+    if (!holderClient) return;
+    
+    setIsCheckingIncoming(true);
+    try {
+      console.log("Holder checking for incoming credentials...");
+      const grantNotifications = await waitForAndGetNotification(
+        holderClient,
+        IPEX_GRANT_ROUTE
+      );
+      
+      if (grantNotifications && grantNotifications.length > 0) {
+        const newIncoming = grantNotifications.map((notification, index) => ({
+          id: `incoming-${Date.now()}-${index}`,
+          notificationId: notification.i,
+          grantSaid: notification.a.d,
+          receivedAt: new Date().toISOString(),
+          status: "pending",
+          issuer: notification.a.i || "Unknown Issuer",
+        }));
+        
+        setIncomingCredentials(newIncoming);
+        console.log(`Found ${newIncoming.length} incoming credentials`);
+        
+        if (newIncoming.length > 0) {
+          toast({
+            title: "Incoming Credentials",
+            description: `Found ${newIncoming.length} new credential(s) to admit`,
+          });
+        }
+      }
+    } catch (error) {
+      console.log("No incoming credentials found or error:", error.message);
+    } finally {
+      setIsCheckingIncoming(false);
+    }
+  };
+
+  const handleAdmitCredential = async (incomingCred) => {
+    if (!holderClient) return;
+    
+    setIsProcessing(true);
+    try {
+      console.log("Holder admitting credential:", incomingCred.grantSaid);
+      
+      // Admit the grant
+      const admitResponse = await ipexAdmitGrant(
+        holderClient,
+        holderData.alias,
+        incomingCred.issuer,
+        incomingCred.grantSaid
+      );
+      console.log("Holder admitting credential");
+
+      // Mark notification as read
+      await markNotificationRead(holderClient, incomingCred.notificationId);
+      
+      // Update the incoming credential status
+      setIncomingCredentials(prev => 
+        prev.map(cred => 
+          cred.id === incomingCred.id 
+            ? { ...cred, status: "admitted" }
+            : cred
+        )
+      );
+      
+      toast({
+        title: "Credential Admitted",
+        description: "Credential has been successfully admitted to your wallet",
+      });
+      
+      // Refresh the main credentials list
+      // In a real implementation, you would fetch the updated credentials from the client
+      setTimeout(() => {
+        // Remove from incoming after successful admit
+        setIncomingCredentials(prev => 
+          prev.filter(cred => cred.id !== incomingCred.id)
+        );
+      }, 2000);
+      
+    } catch (error) {
+      console.error("Error admitting credential:", error);
+      toast({
+        title: "ERROR",
+        description: "Failed to admit credential",
+        variant: "destructive",
+      });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   const handlePresentCredential = async () => {
     setIsProcessing(true);
     setTimeout(() => {
@@ -273,6 +382,87 @@ const Holder = () => {
             </TabsList>
 
             <TabsContent value="credentials" className="space-y-6">
+              {/* Incoming Credentials Section */}
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="flex items-center gap-2">
+                        <Clock className="h-5 w-5" />
+                        Incoming Credentials
+                      </CardTitle>
+                      <CardDescription>
+                        New credentials awaiting your approval
+                      </CardDescription>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={checkIncomingCredentials}
+                      disabled={isCheckingIncoming}
+                      className="flex items-center gap-2"
+                    >
+                      <RefreshCw className={`h-4 w-4 ${isCheckingIncoming ? 'animate-spin' : ''}`} />
+                      {isCheckingIncoming ? "Checking..." : "Check Now"}
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {incomingCredentials.length === 0 ? (
+                    <div className="text-center py-8 text-slate-500">
+                      <Clock className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                      <p>No incoming credentials found</p>
+                      <p className="text-sm">Check back later or use the refresh button</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {incomingCredentials.map((incomingCred) => (
+                        <div
+                          key={incomingCred.id}
+                          className="border rounded-lg p-4 space-y-3"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <div className="text-sm font-mono text-slate-600">
+                                {incomingCred.grantSaid.substring(0, 20)}...
+                              </div>
+                              <Badge 
+                                variant={incomingCred.status === "admitted" ? "default" : "secondary"}
+                              >
+                                {incomingCred.status}
+                              </Badge>
+                            </div>
+                            <Button
+                              variant="default"
+                              size="sm"
+                              onClick={() => handleAdmitCredential(incomingCred)}
+                              disabled={isProcessing || incomingCred.status === "admitted"}
+                            >
+                              {incomingCred.status === "admitted" ? "Admitted" : "Admit Credential"}
+                            </Button>
+                          </div>
+                          <div className="grid grid-cols-2 gap-4 text-sm">
+                            <div>
+                              <span className="text-slate-500">From:</span>
+                              <div className="font-medium font-mono text-xs">
+                                {incomingCred.issuer.substring(0, 20)}...
+                              </div>
+                            </div>
+                            <div>
+                              <span className="text-slate-500">Received:</span>
+                              <div className="font-medium">
+                                {new Date(incomingCred.receivedAt).toLocaleString()}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Stored Credentials Section */}
               <Card>
                 <CardHeader>
                   <CardTitle>Stored Credentials</CardTitle>
