@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useConfig } from "@/hooks/useConfig";
@@ -22,6 +21,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { PasscodeDialog } from "@/components/PasscodeDialog";
 
 const Verifier = () => {
   const navigate = useNavigate();
@@ -56,7 +56,7 @@ const Verifier = () => {
     },
   ]);
 
-  const handleConnect = async () => {
+  const handleConnect = async (userPasscode: string) => {
     setIsProcessing(true);
     setTimeout(() => {
       setIsConnected(true);
@@ -178,13 +178,11 @@ const Verifier = () => {
                   placeholder="Enter verifier alias"
                 />
               </div>
-              <Button
-                onClick={handleConnect}
-                disabled={isProcessing}
-                className="w-full"
-              >
-                {isProcessing ? "Connecting..." : "Connect to KERI Network"}
-              </Button>
+              <PasscodeDialog 
+                onPasscodeSubmit={handleConnect}
+                isProcessing={isProcessing}
+                entityType="Verifier"
+              />
             </CardContent>
           </Card>
         ) : (

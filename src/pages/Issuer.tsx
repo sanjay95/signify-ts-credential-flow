@@ -52,6 +52,7 @@ import {
 } from "../utils/utils";
 import { getItem, setItem } from "@/utils/db";
 import { set } from "date-fns";
+import { PasscodeDialog } from "@/components/PasscodeDialog";
 
 const Issuer = () => {
   const navigate = useNavigate();
@@ -127,11 +128,11 @@ const Issuer = () => {
     },
   ]);
 
-  const handleConnect = async () => {
+  const handleConnect = async (userPasscode: string) => {
     setIsProcessing(true);
     console.log("Creating Issuer...");
     try {
-      const issuerBran = randomPasscode();
+      const issuerBran = userPasscode;
       const issuerAidAlias = issuerData.alias || "issuerAid";
       const { client: issuerClient } = await initializeAndConnectClient(
         issuerBran,
@@ -361,13 +362,11 @@ const Issuer = () => {
                   placeholder="Enter registry name"
                 />
               </div>
-              <Button
-                onClick={handleConnect}
-                disabled={isProcessing}
-                className="w-full"
-              >
-                {isProcessing ? "Connecting..." : "Connect to KERI Network"}
-              </Button>
+              <PasscodeDialog 
+                onPasscodeSubmit={handleConnect}
+                isProcessing={isProcessing}
+                entityType="Issuer"
+              />
             </CardContent>
           </Card>
         ) : (

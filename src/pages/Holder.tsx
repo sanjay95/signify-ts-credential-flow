@@ -53,6 +53,7 @@ import {
   SCHEMA_SERVER_HOST,
 } from "../utils/utils";
 import { getItem, setItem } from "@/utils/db";
+import { PasscodeDialog } from "@/components/PasscodeDialog";
 
 const Holder = () => {
   const navigate = useNavigate();
@@ -121,11 +122,11 @@ const Holder = () => {
     selectedCredential: "",
   });
 
-  const handleConnect = async () => {
+  const handleConnect = async (userPasscode: string) => {
     setIsProcessing(true);
     console.log("Creating Holder...");
     try {
-      const holderBran = randomPasscode();
+      const holderBran = userPasscode;
       const holderAidAlias = holderData.alias || "holderAid";
       const { client: holderClient } = await initializeAndConnectClient(
         holderBran,
@@ -364,13 +365,11 @@ const Holder = () => {
                   placeholder="Enter holder alias"
                 />
               </div>
-              <Button
-                onClick={handleConnect}
-                disabled={isProcessing}
-                className="w-full"
-              >
-                {isProcessing ? "Connecting..." : "Connect to KERI Network"}
-              </Button>
+              <PasscodeDialog 
+                onPasscodeSubmit={handleConnect}
+                isProcessing={isProcessing}
+                entityType="Holder"
+              />
             </CardContent>
           </Card>
         ) : (
