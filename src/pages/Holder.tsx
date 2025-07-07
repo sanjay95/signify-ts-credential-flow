@@ -179,7 +179,7 @@ const Holder = () => {
 
   const checkIncomingCredentials = async () => {
     if (!holderClient) return;
-    
+
     setIsCheckingIncoming(true);
     try {
       console.log("Holder checking for incoming credentials...");
@@ -187,7 +187,7 @@ const Holder = () => {
         holderClient,
         IPEX_GRANT_ROUTE
       );
-      
+
       if (grantNotifications && grantNotifications.length > 0) {
         const newIncoming = grantNotifications.map((notification, index) => ({
           id: `incoming-${Date.now()}-${index}`,
@@ -197,10 +197,10 @@ const Holder = () => {
           status: "pending",
           issuer: notification.a.i || "Unknown Issuer",
         }));
-        
+
         setIncomingCredentials(newIncoming);
         console.log(`Found ${newIncoming.length} incoming credentials`);
-        
+
         if (newIncoming.length > 0) {
           toast({
             title: "Incoming Credentials",
@@ -217,11 +217,11 @@ const Holder = () => {
 
   const handleAdmitCredential = async (incomingCred) => {
     if (!holderClient) return;
-    
+
     setIsProcessing(true);
     try {
       console.log("Holder admitting credential:", incomingCred.grantSaid);
-      
+
       // Admit the grant
       const admitResponse = await ipexAdmitGrant(
         holderClient,
@@ -233,30 +233,27 @@ const Holder = () => {
 
       // Mark notification as read
       await markNotificationRead(holderClient, incomingCred.notificationId);
-      
+
       // Update the incoming credential status
-      setIncomingCredentials(prev => 
-        prev.map(cred => 
-          cred.id === incomingCred.id 
-            ? { ...cred, status: "admitted" }
-            : cred
+      setIncomingCredentials((prev) =>
+        prev.map((cred) =>
+          cred.id === incomingCred.id ? { ...cred, status: "admitted" } : cred
         )
       );
-      
+
       toast({
         title: "Credential Admitted",
         description: "Credential has been successfully admitted to your wallet",
       });
-      
+
       // Refresh the main credentials list
       // In a real implementation, you would fetch the updated credentials from the client
       setTimeout(() => {
         // Remove from incoming after successful admit
-        setIncomingCredentials(prev => 
-          prev.filter(cred => cred.id !== incomingCred.id)
+        setIncomingCredentials((prev) =>
+          prev.filter((cred) => cred.id !== incomingCred.id)
         );
       }, 2000);
-      
     } catch (error) {
       console.error("Error admitting credential:", error);
       toast({
@@ -365,7 +362,7 @@ const Holder = () => {
                   placeholder="Enter holder alias"
                 />
               </div>
-              <PasscodeDialog 
+              <PasscodeDialog
                 onPasscodeSubmit={handleConnect}
                 isProcessing={isProcessing}
                 entityType="Holder"
@@ -401,7 +398,11 @@ const Holder = () => {
                       disabled={isCheckingIncoming}
                       className="flex items-center gap-2"
                     >
-                      <RefreshCw className={`h-4 w-4 ${isCheckingIncoming ? 'animate-spin' : ''}`} />
+                      <RefreshCw
+                        className={`h-4 w-4 ${
+                          isCheckingIncoming ? "animate-spin" : ""
+                        }`}
+                      />
                       {isCheckingIncoming ? "Checking..." : "Check Now"}
                     </Button>
                   </div>
@@ -411,7 +412,9 @@ const Holder = () => {
                     <div className="text-center py-8 text-slate-500">
                       <Clock className="h-12 w-12 mx-auto mb-4 opacity-50" />
                       <p>No incoming credentials found</p>
-                      <p className="text-sm">Check back later or use the refresh button</p>
+                      <p className="text-sm">
+                        Check back later or use the refresh button
+                      </p>
                     </div>
                   ) : (
                     <div className="space-y-4">
@@ -425,8 +428,12 @@ const Holder = () => {
                               <div className="text-sm font-mono text-slate-600">
                                 {incomingCred.grantSaid.substring(0, 20)}...
                               </div>
-                              <Badge 
-                                variant={incomingCred.status === "admitted" ? "default" : "secondary"}
+                              <Badge
+                                variant={
+                                  incomingCred.status === "admitted"
+                                    ? "default"
+                                    : "secondary"
+                                }
                               >
                                 {incomingCred.status}
                               </Badge>
@@ -434,10 +441,17 @@ const Holder = () => {
                             <Button
                               variant="default"
                               size="sm"
-                              onClick={() => handleAdmitCredential(incomingCred)}
-                              disabled={isProcessing || incomingCred.status === "admitted"}
+                              onClick={() =>
+                                handleAdmitCredential(incomingCred)
+                              }
+                              disabled={
+                                isProcessing ||
+                                incomingCred.status === "admitted"
+                              }
                             >
-                              {incomingCred.status === "admitted" ? "Admitted" : "Admit Credential"}
+                              {incomingCred.status === "admitted"
+                                ? "Admitted"
+                                : "Admit Credential"}
                             </Button>
                           </div>
                           <div className="grid grid-cols-2 gap-4 text-sm">
@@ -450,7 +464,9 @@ const Holder = () => {
                             <div>
                               <span className="text-slate-500">Received:</span>
                               <div className="font-medium">
-                                {new Date(incomingCred.receivedAt).toLocaleString()}
+                                {new Date(
+                                  incomingCred.receivedAt
+                                ).toLocaleString()}
                               </div>
                             </div>
                           </div>

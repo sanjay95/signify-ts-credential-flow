@@ -362,7 +362,7 @@ const Issuer = () => {
                   placeholder="Enter registry name"
                 />
               </div>
-              <PasscodeDialog 
+              <PasscodeDialog
                 onPasscodeSubmit={handleConnect}
                 isProcessing={isProcessing}
                 entityType="Issuer"
