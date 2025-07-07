@@ -1,5 +1,4 @@
-
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useConfig } from "@/hooks/useConfig";
 import {
@@ -23,6 +22,36 @@ import {
   CheckCircle,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { randomPasscode, Serder } from "signify-ts";
+import {
+  initializeSignify,
+  initializeAndConnectClient,
+  createNewAID,
+  addEndRoleForAID,
+  generateOOBI,
+  resolveOOBI,
+  createTimestamp,
+  createCredentialRegistry,
+  getSchema,
+  issueCredential,
+  ipexGrantCredential,
+  getCredentialState,
+  waitForAndGetNotification,
+  ipexAdmitGrant,
+  markNotificationRead,
+  DEFAULT_IDENTIFIER_ARGS,
+  DEFAULT_TIMEOUT_MS,
+  DEFAULT_DELAY_MS,
+  DEFAULT_RETRIES,
+  ROLE_AGENT,
+  IPEX_GRANT_ROUTE,
+  IPEX_ADMIT_ROUTE,
+  IPEX_APPLY_ROUTE,
+  IPEX_OFFER_ROUTE,
+  SCHEMA_SERVER_HOST,
+} from "../utils/utils";
+import { getItem, setItem } from "@/utils/db";
+import { set } from "date-fns";
 
 const Holder = () => {
   const navigate = useNavigate();
@@ -33,7 +62,28 @@ const Holder = () => {
 
   const [holderData, setHolderData] = useState({
     alias: "holderAid",
+    registryName: "issuerRegistry",
+    holderAid: "",
+    holderOOBI: "",
+    holderBran: "",
   });
+  const [holderClient, setHolderClient] = useState(null);
+
+  useEffect(() => {
+    const loadData = async () => {
+      const saved = await getItem<any>("holder-data");
+      if (saved) {
+        setHolderData(saved);
+      }
+    };
+    loadData();
+  }, []);
+
+  useEffect(() => {
+    if (holderData) {
+      setItem("holder-data", holderData);
+    }
+  }, [holderData]);
 
   const [credentials, setCredentials] = useState([
     {
@@ -57,23 +107,66 @@ const Holder = () => {
 
   const handleConnect = async () => {
     setIsProcessing(true);
-    setTimeout(() => {
+    console.log("Creating Holder...");
+    try {
+      const holderBran = randomPasscode();
+      const holderAidAlias = holderData.alias || "holderAid";
+      const { client: holderClient } = await initializeAndConnectClient(
+        holderBran,
+        config.adminUrl,
+        config.bootUrl
+      );
+      setHolderClient(holderClient);
+      console.log("Holder client initialized:");
+      if (!holderData.holderAid) {
+        const { aid: holderAid } = await createNewAID(
+          holderClient,
+          holderData.alias,
+          DEFAULT_IDENTIFIER_ARGS
+        );
+        console.log("Holder AID created:", holderAid);
+
+        console.log("Adding Agent role to AID...");
+        await addEndRoleForAID(holderClient, holderAidAlias, ROLE_AGENT);
+        const holderOOBI = await generateOOBI(
+          holderClient,
+          holderAidAlias,
+          ROLE_AGENT
+        );
+        console.log("Holder OOBI generated:", holderOOBI);
+        setHolderData((prevData) => ({
+          ...prevData,
+          holderAid: holderAid,
+          holderOOBI: holderOOBI,
+          holderBran: holderBran,
+        }));
+      }
       setIsConnected(true);
       setIsProcessing(false);
+
       toast({
-        title: "Connected Successfully",
+        title: "Connected to KERI Network",
         description: "Holder client initialized and connected to KERI network",
       });
-    }, 2000);
+    } catch (error) {
+      console.error("Error connecting holder client:", error);
+      setIsProcessing(false);
+      toast({
+        title: "ERROR",
+        description: "Failed to connect to KERI network or present credential",
+      });
+    } finally {
+      setIsProcessing(false);
+    }
   };
-
   const handlePresentCredential = async () => {
     setIsProcessing(true);
     setTimeout(() => {
       setIsProcessing(false);
       toast({
         title: "Credential Presented",
-        description: "ACDC credential has been successfully presented to verifier",
+        description:
+          "ACDC credential has been successfully presented to verifier",
       });
     }, 3000);
   };
