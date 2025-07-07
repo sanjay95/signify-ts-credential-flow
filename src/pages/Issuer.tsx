@@ -1,22 +1,62 @@
-
 import { useState } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Key, ArrowLeft, Plus, Send, RotateCcw, CheckCircle } from "lucide-react";
+import {
+  Key,
+  ArrowLeft,
+  Plus,
+  Send,
+  RotateCcw,
+  CheckCircle,
+} from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
+import { randomPasscode, Serder } from "signify-ts";
+import {
+  initializeSignify,
+  initializeAndConnectClient,
+  createNewAID,
+  addEndRoleForAID,
+  generateOOBI,
+  resolveOOBI,
+  createTimestamp,
+  createCredentialRegistry,
+  getSchema,
+  issueCredential,
+  ipexGrantCredential,
+  getCredentialState,
+  waitForAndGetNotification,
+  ipexAdmitGrant,
+  markNotificationRead,
+  DEFAULT_IDENTIFIER_ARGS,
+  DEFAULT_TIMEOUT_MS,
+  DEFAULT_DELAY_MS,
+  DEFAULT_RETRIES,
+  ROLE_AGENT,
+  IPEX_GRANT_ROUTE,
+  IPEX_ADMIT_ROUTE,
+  IPEX_APPLY_ROUTE,
+  IPEX_OFFER_ROUTE,
+  SCHEMA_SERVER_HOST,
+} from "../utils/utils";
 
 const Issuer = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [isConnected, setIsConnected] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
-  
+
   const [issuerData, setIssuerData] = useState({
     alias: "issuerAid",
     registryName: "issuerRegistry",
@@ -26,7 +66,7 @@ const Issuer = () => {
     eventName: "GLEIF Summit",
     accessLevel: "staff",
     validDate: "2026-10-01",
-    holderAID: ""
+    holderAID: "",
   });
 
   const [credentials, setCredentials] = useState([
@@ -39,9 +79,9 @@ const Issuer = () => {
       claims: {
         eventName: "GLEIF Summit",
         accessLevel: "staff",
-        validDate: "2026-10-01"
-      }
-    }
+        validDate: "2026-10-01",
+      },
+    },
   ]);
 
   const handleConnect = async () => {
@@ -66,19 +106,20 @@ const Issuer = () => {
         said: `E${Math.random().toString(36).substring(2, 15).toUpperCase()}`,
         status: "issued",
         holder: credentialData.holderAID,
-        issuedDate: new Date().toISOString().split('T')[0],
+        issuedDate: new Date().toISOString().split("T")[0],
         claims: {
           eventName: credentialData.eventName,
           accessLevel: credentialData.accessLevel,
-          validDate: credentialData.validDate
-        }
+          validDate: credentialData.validDate,
+        },
       };
-      
+
       setCredentials([...credentials, newCredential]);
       setIsProcessing(false);
       toast({
         title: "Credential Issued",
-        description: "ACDC credential has been successfully created and granted to holder",
+        description:
+          "ACDC credential has been successfully created and granted to holder",
       });
     }, 3000);
   };
@@ -86,15 +127,16 @@ const Issuer = () => {
   const handleRevokeCredential = async (credentialId: string) => {
     setIsProcessing(true);
     setTimeout(() => {
-      setCredentials(credentials.map(cred => 
-        cred.id === credentialId 
-          ? { ...cred, status: "revoked" }
-          : cred
-      ));
+      setCredentials(
+        credentials.map((cred) =>
+          cred.id === credentialId ? { ...cred, status: "revoked" } : cred
+        )
+      );
       setIsProcessing(false);
       toast({
         title: "Credential Revoked",
-        description: "Credential status updated in TEL and propagated to network",
+        description:
+          "Credential status updated in TEL and propagated to network",
       });
     }, 2000);
   };
@@ -105,8 +147,8 @@ const Issuer = () => {
       <div className="bg-white border-b border-slate-200 shadow-sm">
         <div className="container mx-auto px-6 py-6">
           <div className="flex items-center gap-4">
-            <Button 
-              variant="ghost" 
+            <Button
+              variant="ghost"
               size="sm"
               onClick={() => navigate("/")}
               className="flex items-center gap-2"
@@ -119,13 +161,24 @@ const Issuer = () => {
                 <Key className="h-6 w-6 text-white" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-slate-900">Issuer Dashboard</h1>
-                <p className="text-slate-600">Manage credential issuance and revocation</p>
+                <h1 className="text-2xl font-bold text-slate-900">
+                  Issuer Dashboard
+                </h1>
+                <p className="text-slate-600">
+                  Manage credential issuance and revocation
+                </p>
               </div>
             </div>
             <div className="ml-auto">
-              <Badge variant={isConnected ? "default" : "secondary"} className="flex items-center gap-1">
-                <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-400' : 'bg-gray-400'}`}></div>
+              <Badge
+                variant={isConnected ? "default" : "secondary"}
+                className="flex items-center gap-1"
+              >
+                <div
+                  className={`w-2 h-2 rounded-full ${
+                    isConnected ? "bg-green-400" : "bg-gray-400"
+                  }`}
+                ></div>
                 {isConnected ? "Connected" : "Disconnected"}
               </Badge>
             </div>
@@ -148,7 +201,9 @@ const Issuer = () => {
                 <Input
                   id="alias"
                   value={issuerData.alias}
-                  onChange={(e) => setIssuerData({...issuerData, alias: e.target.value})}
+                  onChange={(e) =>
+                    setIssuerData({ ...issuerData, alias: e.target.value })
+                  }
                   placeholder="Enter issuer alias"
                 />
               </div>
@@ -157,12 +212,17 @@ const Issuer = () => {
                 <Input
                   id="registry"
                   value={issuerData.registryName}
-                  onChange={(e) => setIssuerData({...issuerData, registryName: e.target.value})}
+                  onChange={(e) =>
+                    setIssuerData({
+                      ...issuerData,
+                      registryName: e.target.value,
+                    })
+                  }
                   placeholder="Enter registry name"
                 />
               </div>
-              <Button 
-                onClick={handleConnect} 
+              <Button
+                onClick={handleConnect}
                 disabled={isProcessing}
                 className="w-full"
               >
@@ -196,7 +256,12 @@ const Issuer = () => {
                       <Input
                         id="eventName"
                         value={credentialData.eventName}
-                        onChange={(e) => setCredentialData({...credentialData, eventName: e.target.value})}
+                        onChange={(e) =>
+                          setCredentialData({
+                            ...credentialData,
+                            eventName: e.target.value,
+                          })
+                        }
                       />
                     </div>
                     <div className="space-y-2">
@@ -204,7 +269,12 @@ const Issuer = () => {
                       <Input
                         id="accessLevel"
                         value={credentialData.accessLevel}
-                        onChange={(e) => setCredentialData({...credentialData, accessLevel: e.target.value})}
+                        onChange={(e) =>
+                          setCredentialData({
+                            ...credentialData,
+                            accessLevel: e.target.value,
+                          })
+                        }
                       />
                     </div>
                     <div className="space-y-2">
@@ -213,7 +283,12 @@ const Issuer = () => {
                         id="validDate"
                         type="date"
                         value={credentialData.validDate}
-                        onChange={(e) => setCredentialData({...credentialData, validDate: e.target.value})}
+                        onChange={(e) =>
+                          setCredentialData({
+                            ...credentialData,
+                            validDate: e.target.value,
+                          })
+                        }
                       />
                     </div>
                     <div className="space-y-2">
@@ -221,18 +296,25 @@ const Issuer = () => {
                       <Input
                         id="holderAID"
                         value={credentialData.holderAID}
-                        onChange={(e) => setCredentialData({...credentialData, holderAID: e.target.value})}
+                        onChange={(e) =>
+                          setCredentialData({
+                            ...credentialData,
+                            holderAID: e.target.value,
+                          })
+                        }
                         placeholder="Enter holder's AID"
                       />
                     </div>
                   </div>
-                  <Button 
-                    onClick={handleIssueCredential} 
+                  <Button
+                    onClick={handleIssueCredential}
                     disabled={isProcessing || !credentialData.holderAID}
                     className="w-full"
                   >
                     <Send className="h-4 w-4 mr-2" />
-                    {isProcessing ? "Issuing Credential..." : "Issue Credential"}
+                    {isProcessing
+                      ? "Issuing Credential..."
+                      : "Issue Credential"}
                   </Button>
                 </CardContent>
               </Card>
@@ -249,13 +331,22 @@ const Issuer = () => {
                 <CardContent>
                   <div className="space-y-4">
                     {credentials.map((credential) => (
-                      <div key={credential.id} className="border rounded-lg p-4 space-y-3">
+                      <div
+                        key={credential.id}
+                        className="border rounded-lg p-4 space-y-3"
+                      >
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-3">
                             <div className="text-sm font-mono text-slate-600">
                               {credential.said.substring(0, 20)}...
                             </div>
-                            <Badge variant={credential.status === "issued" ? "default" : "destructive"}>
+                            <Badge
+                              variant={
+                                credential.status === "issued"
+                                  ? "default"
+                                  : "destructive"
+                              }
+                            >
                               {credential.status}
                             </Badge>
                           </div>
@@ -263,7 +354,9 @@ const Issuer = () => {
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() => handleRevokeCredential(credential.id)}
+                              onClick={() =>
+                                handleRevokeCredential(credential.id)
+                              }
                               disabled={isProcessing}
                             >
                               <RotateCcw className="h-4 w-4 mr-2" />
@@ -274,19 +367,27 @@ const Issuer = () => {
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                           <div>
                             <span className="text-slate-500">Event:</span>
-                            <div className="font-medium">{credential.claims.eventName}</div>
+                            <div className="font-medium">
+                              {credential.claims.eventName}
+                            </div>
                           </div>
                           <div>
                             <span className="text-slate-500">Access:</span>
-                            <div className="font-medium">{credential.claims.accessLevel}</div>
+                            <div className="font-medium">
+                              {credential.claims.accessLevel}
+                            </div>
                           </div>
                           <div>
                             <span className="text-slate-500">Valid Until:</span>
-                            <div className="font-medium">{credential.claims.validDate}</div>
+                            <div className="font-medium">
+                              {credential.claims.validDate}
+                            </div>
                           </div>
                           <div>
                             <span className="text-slate-500">Issued:</span>
-                            <div className="font-medium">{credential.issuedDate}</div>
+                            <div className="font-medium">
+                              {credential.issuedDate}
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -315,7 +416,9 @@ const Issuer = () => {
                   </div>
                   <div className="flex items-center gap-2 p-4 bg-green-50 rounded-lg">
                     <CheckCircle className="h-5 w-5 text-green-600" />
-                    <span className="text-green-700">Connected to KERI network</span>
+                    <span className="text-green-700">
+                      Connected to KERI network
+                    </span>
                   </div>
                 </CardContent>
               </Card>
