@@ -2,11 +2,24 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Shield, Users, CheckCircle, Key, FileText, Globe } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Shield, Users, CheckCircle, Key, FileText, Globe, Settings, ChevronDown } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { useState } from "react";
 
 const Index = () => {
   const navigate = useNavigate();
+  const [isConfigOpen, setIsConfigOpen] = useState(false);
+  const [config, setConfig] = useState({
+    adminUrl: "http://localhost:3901",
+    bootUrl: "http://localhost:3903"
+  });
+
+  const handleNavigate = (path: string) => {
+    navigate(path, { state: { config } });
+  };
 
   const roles = [
     {
@@ -72,6 +85,57 @@ const Index = () => {
 
       {/* Main Content */}
       <div className="container mx-auto px-6 py-12">
+        {/* Configuration Section */}
+        <div className="mb-8">
+          <Collapsible open={isConfigOpen} onOpenChange={setIsConfigOpen}>
+            <CollapsibleTrigger asChild>
+              <Button variant="outline" className="w-full max-w-md mx-auto flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Settings className="h-4 w-4" />
+                  Network Configuration
+                </div>
+                <ChevronDown className={`h-4 w-4 transition-transform ${isConfigOpen ? 'rotate-180' : ''}`} />
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="mt-4">
+              <Card className="max-w-md mx-auto">
+                <CardHeader>
+                  <CardTitle className="text-lg">KERI Network Settings</CardTitle>
+                  <CardDescription>
+                    Configure the Admin and Boot URLs for all client connections
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="adminUrl">Admin URL</Label>
+                    <Input
+                      id="adminUrl"
+                      value={config.adminUrl}
+                      onChange={(e) => setConfig({ ...config, adminUrl: e.target.value })}
+                      placeholder="http://localhost:3901"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="bootUrl">Boot URL</Label>
+                    <Input
+                      id="bootUrl"
+                      value={config.bootUrl}
+                      onChange={(e) => setConfig({ ...config, bootUrl: e.target.value })}
+                      placeholder="http://localhost:3903"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2 p-3 bg-blue-50 rounded-lg">
+                    <Globe className="h-4 w-4 text-blue-600" />
+                    <span className="text-sm text-blue-700">
+                      These settings will be used by all client types
+                    </span>
+                  </div>
+                </CardContent>
+              </Card>
+            </CollapsibleContent>
+          </Collapsible>
+        </div>
+
         <div className="text-center mb-12">
           <h2 className="text-2xl font-bold text-slate-900 mb-4">Choose Your Role</h2>
           <p className="text-slate-600 max-w-2xl mx-auto">
@@ -104,7 +168,7 @@ const Index = () => {
                   </div>
                   
                   <Button 
-                    onClick={() => navigate(role.path)}
+                    onClick={() => handleNavigate(role.path)}
                     className="w-full group-hover:bg-blue-600 transition-colors duration-300"
                   >
                     Enter as {role.title}

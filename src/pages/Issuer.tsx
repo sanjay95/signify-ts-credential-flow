@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Card,
   CardContent,
@@ -53,9 +53,22 @@ import {
 
 const Issuer = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { toast } = useToast();
   const [isConnected, setIsConnected] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+
+  // Get config from navigation state
+  const [config, setConfig] = useState({
+    adminUrl: "http://localhost:3901",
+    bootUrl: "http://localhost:3903"
+  });
+
+  useEffect(() => {
+    if (location.state?.config) {
+      setConfig(location.state.config);
+    }
+  }, [location.state]);
 
   const [issuerData, setIssuerData] = useState({
     alias: "issuerAid",
@@ -169,7 +182,11 @@ const Issuer = () => {
                 </p>
               </div>
             </div>
-            <div className="ml-auto">
+            <div className="ml-auto flex items-center gap-4">
+              <div className="text-sm text-slate-500">
+                <div>Admin: {config.adminUrl}</div>
+                <div>Boot: {config.bootUrl}</div>
+              </div>
               <Badge
                 variant={isConnected ? "default" : "secondary"}
                 className="flex items-center gap-1"
@@ -196,6 +213,20 @@ const Issuer = () => {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Admin URL</Label>
+                  <div className="p-2 bg-gray-50 rounded text-sm font-mono">
+                    {config.adminUrl}
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>Boot URL</Label>
+                  <div className="p-2 bg-gray-50 rounded text-sm font-mono">
+                    {config.bootUrl}
+                  </div>
+                </div>
+              </div>
               <div className="space-y-2">
                 <Label htmlFor="alias">Issuer AID Alias</Label>
                 <Input
@@ -406,6 +437,16 @@ const Issuer = () => {
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Admin URL</Label>
+                      <Input value={config.adminUrl} readOnly />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Boot URL</Label>
+                      <Input value={config.bootUrl} readOnly />
+                    </div>
+                  </div>
                   <div className="space-y-2">
                     <Label>AID Alias</Label>
                     <Input value={issuerData.alias} readOnly />

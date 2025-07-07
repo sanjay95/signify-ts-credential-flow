@@ -1,64 +1,59 @@
 
 import { useState } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { useNavigate } from "react-router-dom";
+import { useConfig } from "@/hooks/useConfig";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Users, ArrowLeft, Wallet, Send, Eye, Download } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import {
+  Users,
+  ArrowLeft,
+  Download,
+  Send,
+  Eye,
+  CheckCircle,
+} from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 const Holder = () => {
   const navigate = useNavigate();
+  const { config } = useConfig();
   const { toast } = useToast();
   const [isConnected, setIsConnected] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
-  
+
   const [holderData, setHolderData] = useState({
     alias: "holderAid",
-  });
-
-  const [presentationRequest, setPresentationRequest] = useState({
-    verifierAID: "",
-    attributes: "",
   });
 
   const [credentials, setCredentials] = useState([
     {
       id: "cred-001",
       said: "EGUPiCVO73M9worPwR3PfThAtC0AJnH5ZgwsXf6TzbVK",
-      status: "valid",
+      status: "received",
       issuer: "issuer123",
       receivedDate: "2024-01-15",
       claims: {
         eventName: "GLEIF Summit",
         accessLevel: "staff",
-        validDate: "2026-10-01"
+        validDate: "2026-10-01",
       },
-      presentations: 2
-    }
+    },
   ]);
 
-  const [notifications, setNotifications] = useState([
-    {
-      id: "notif-001",
-      type: "grant",
-      from: "issuer123",
-      message: "New credential received from issuer",
-      timestamp: "2024-01-15T10:30:00Z",
-      read: false
-    },
-    {
-      id: "notif-002",
-      type: "apply",
-      from: "verifier456",
-      message: "Presentation request received",
-      timestamp: "2024-01-14T15:45:00Z",
-      read: false
-    }
-  ]);
+  const [presentationData, setPresentationData] = useState({
+    verifierAID: "",
+    selectedCredential: "",
+  });
 
   const handleConnect = async () => {
     setIsProcessing(true);
@@ -78,41 +73,9 @@ const Holder = () => {
       setIsProcessing(false);
       toast({
         title: "Credential Presented",
-        description: "Credential successfully shared with verifier via IPEX Grant",
+        description: "ACDC credential has been successfully presented to verifier",
       });
-    }, 2500);
-  };
-
-  const handleReceiveCredential = async () => {
-    setIsProcessing(true);
-    setTimeout(() => {
-      const newCredential = {
-        id: `cred-${Date.now()}`,
-        said: `E${Math.random().toString(36).substring(2, 15).toUpperCase()}`,
-        status: "valid",
-        issuer: "issuer789",
-        receivedDate: new Date().toISOString().split('T')[0],
-        claims: {
-          eventName: "Tech Conference",
-          accessLevel: "attendee",
-          validDate: "2025-12-31"
-        },
-        presentations: 0
-      };
-      
-      setCredentials([...credentials, newCredential]);
-      setIsProcessing(false);
-      toast({
-        title: "Credential Received",
-        description: "New ACDC credential added to your wallet",
-      });
-    }, 2000);
-  };
-
-  const markNotificationRead = (notifId: string) => {
-    setNotifications(notifications.map(n => 
-      n.id === notifId ? { ...n, read: true } : n
-    ));
+    }, 3000);
   };
 
   return (
@@ -121,8 +84,8 @@ const Holder = () => {
       <div className="bg-white border-b border-slate-200 shadow-sm">
         <div className="container mx-auto px-6 py-6">
           <div className="flex items-center gap-4">
-            <Button 
-              variant="ghost" 
+            <Button
+              variant="ghost"
               size="sm"
               onClick={() => navigate("/")}
               className="flex items-center gap-2"
@@ -135,18 +98,28 @@ const Holder = () => {
                 <Users className="h-6 w-6 text-white" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-slate-900">Holder Dashboard</h1>
-                <p className="text-slate-600">Manage your credential wallet</p>
+                <h1 className="text-2xl font-bold text-slate-900">
+                  Holder Dashboard
+                </h1>
+                <p className="text-slate-600">
+                  Receive, store, and present credentials
+                </p>
               </div>
             </div>
-            <div className="ml-auto flex items-center gap-3">
-              {notifications.filter(n => !n.read).length > 0 && (
-                <Badge variant="destructive">
-                  {notifications.filter(n => !n.read).length} new
-                </Badge>
-              )}
-              <Badge variant={isConnected ? "default" : "secondary"} className="flex items-center gap-1">
-                <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-400' : 'bg-gray-400'}`}></div>
+            <div className="ml-auto flex items-center gap-4">
+              <div className="text-sm text-slate-500">
+                <div>Admin: {config.adminUrl}</div>
+                <div>Boot: {config.bootUrl}</div>
+              </div>
+              <Badge
+                variant={isConnected ? "default" : "secondary"}
+                className="flex items-center gap-1"
+              >
+                <div
+                  className={`w-2 h-2 rounded-full ${
+                    isConnected ? "bg-green-400" : "bg-gray-400"
+                  }`}
+                ></div>
                 {isConnected ? "Connected" : "Disconnected"}
               </Badge>
             </div>
@@ -164,17 +137,33 @@ const Holder = () => {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Admin URL</Label>
+                  <div className="p-2 bg-gray-50 rounded text-sm font-mono">
+                    {config.adminUrl}
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>Boot URL</Label>
+                  <div className="p-2 bg-gray-50 rounded text-sm font-mono">
+                    {config.bootUrl}
+                  </div>
+                </div>
+              </div>
               <div className="space-y-2">
                 <Label htmlFor="alias">Holder AID Alias</Label>
                 <Input
                   id="alias"
                   value={holderData.alias}
-                  onChange={(e) => setHolderData({...holderData, alias: e.target.value})}
+                  onChange={(e) =>
+                    setHolderData({ ...holderData, alias: e.target.value })
+                  }
                   placeholder="Enter holder alias"
                 />
               </div>
-              <Button 
-                onClick={handleConnect} 
+              <Button
+                onClick={handleConnect}
                 disabled={isProcessing}
                 className="w-full"
               >
@@ -183,95 +172,82 @@ const Holder = () => {
             </CardContent>
           </Card>
         ) : (
-          <Tabs defaultValue="wallet" className="space-y-6">
-            <TabsList className="grid w-full grid-cols-4">
-              <TabsTrigger value="wallet">Wallet</TabsTrigger>
-              <TabsTrigger value="present">Present</TabsTrigger>
-              <TabsTrigger value="notifications">
-                Notifications
-                {notifications.filter(n => !n.read).length > 0 && (
-                  <Badge variant="destructive" className="ml-2 text-xs">
-                    {notifications.filter(n => !n.read).length}
-                  </Badge>
-                )}
-              </TabsTrigger>
+          <Tabs defaultValue="credentials" className="space-y-6">
+            <TabsList className="grid w-full grid-cols-3">
+              <TabsTrigger value="credentials">My Credentials</TabsTrigger>
+              <TabsTrigger value="present">Present Credential</TabsTrigger>
               <TabsTrigger value="settings">Settings</TabsTrigger>
             </TabsList>
 
-            <TabsContent value="wallet" className="space-y-6">
-              <div className="flex justify-between items-center">
-                <div>
-                  <h3 className="text-lg font-semibold">My Credentials</h3>
-                  <p className="text-slate-600">Manage your stored ACDC credentials</p>
-                </div>
-                <Button onClick={handleReceiveCredential} disabled={isProcessing}>
-                  <Download className="h-4 w-4 mr-2" />
-                  {isProcessing ? "Receiving..." : "Receive Credential"}
-                </Button>
-              </div>
-
-              <div className="grid gap-4">
-                {credentials.map((credential) => (
-                  <Card key={credential.id} className="hover:shadow-md transition-shadow">
-                    <CardContent className="p-6">
-                      <div className="flex items-start justify-between mb-4">
-                        <div className="flex items-center gap-3">
-                          <div className="p-2 bg-green-100 rounded-lg">
-                            <Wallet className="h-5 w-5 text-green-600" />
+            <TabsContent value="credentials" className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Stored Credentials</CardTitle>
+                  <CardDescription>
+                    View and manage all credentials in your wallet
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    {credentials.map((credential) => (
+                      <div
+                        key={credential.id}
+                        className="border rounded-lg p-4 space-y-3"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="text-sm font-mono text-slate-600">
+                              {credential.said.substring(0, 20)}...
+                            </div>
+                            <Badge variant="default">{credential.status}</Badge>
+                          </div>
+                          <Button variant="outline" size="sm">
+                            <Eye className="h-4 w-4 mr-2" />
+                            View Details
+                          </Button>
+                        </div>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                          <div>
+                            <span className="text-slate-500">Event:</span>
+                            <div className="font-medium">
+                              {credential.claims.eventName}
+                            </div>
                           </div>
                           <div>
-                            <h4 className="font-medium">{credential.claims.eventName}</h4>
-                            <p className="text-sm text-slate-600 font-mono">
-                              {credential.said.substring(0, 20)}...
-                            </p>
+                            <span className="text-slate-500">Access:</span>
+                            <div className="font-medium">
+                              {credential.claims.accessLevel}
+                            </div>
+                          </div>
+                          <div>
+                            <span className="text-slate-500">Valid Until:</span>
+                            <div className="font-medium">
+                              {credential.claims.validDate}
+                            </div>
+                          </div>
+                          <div>
+                            <span className="text-slate-500">Received:</span>
+                            <div className="font-medium">
+                              {credential.receivedDate}
+                            </div>
                           </div>
                         </div>
-                        <Badge variant={credential.status === "valid" ? "default" : "destructive"}>
-                          {credential.status}
-                        </Badge>
                       </div>
-                      
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm mb-4">
-                        <div>
-                          <span className="text-slate-500">Access Level:</span>
-                          <div className="font-medium">{credential.claims.accessLevel}</div>
-                        </div>
-                        <div>
-                          <span className="text-slate-500">Valid Until:</span>
-                          <div className="font-medium">{credential.claims.validDate}</div>
-                        </div>
-                        <div>
-                          <span className="text-slate-500">Received:</span>
-                          <div className="font-medium">{credential.receivedDate}</div>
-                        </div>
-                        <div>
-                          <span className="text-slate-500">Presentations:</span>
-                          <div className="font-medium">{credential.presentations}</div>
-                        </div>
-                      </div>
-
-                      <div className="flex gap-2">
-                        <Button variant="outline" size="sm">
-                          <Eye className="h-4 w-4 mr-2" />
-                          View Details
-                        </Button>
-                        <Button variant="outline" size="sm">
-                          <Send className="h-4 w-4 mr-2" />
-                          Present
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
             </TabsContent>
 
             <TabsContent value="present" className="space-y-6">
               <Card>
                 <CardHeader>
-                  <CardTitle>Present Credential</CardTitle>
+                  <CardTitle className="flex items-center gap-2">
+                    <Send className="h-5 w-5" />
+                    Present Credential
+                  </CardTitle>
                   <CardDescription>
-                    Share your credentials with a verifier using IPEX protocol
+                    Share your credential with a verifier using IPEX protocol
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -279,75 +255,50 @@ const Holder = () => {
                     <Label htmlFor="verifierAID">Verifier AID</Label>
                     <Input
                       id="verifierAID"
-                      value={presentationRequest.verifierAID}
-                      onChange={(e) => setPresentationRequest({...presentationRequest, verifierAID: e.target.value})}
+                      value={presentationData.verifierAID}
+                      onChange={(e) =>
+                        setPresentationData({
+                          ...presentationData,
+                          verifierAID: e.target.value,
+                        })
+                      }
                       placeholder="Enter verifier's AID"
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="attributes">Requested Attributes (Optional)</Label>
-                    <Input
-                      id="attributes"
-                      value={presentationRequest.attributes}
-                      onChange={(e) => setPresentationRequest({...presentationRequest, attributes: e.target.value})}
-                      placeholder="e.g., eventName:GLEIF Summit"
-                    />
+                    <Label htmlFor="credential">Select Credential</Label>
+                    <select
+                      className="w-full p-2 border rounded-md"
+                      value={presentationData.selectedCredential}
+                      onChange={(e) =>
+                        setPresentationData({
+                          ...presentationData,
+                          selectedCredential: e.target.value,
+                        })
+                      }
+                    >
+                      <option value="">Choose a credential...</option>
+                      {credentials.map((cred) => (
+                        <option key={cred.id} value={cred.id}>
+                          {cred.claims.eventName} - {cred.claims.accessLevel}
+                        </option>
+                      ))}
+                    </select>
                   </div>
-                  <Button 
-                    onClick={handlePresentCredential} 
-                    disabled={isProcessing || !presentationRequest.verifierAID}
+                  <Button
+                    onClick={handlePresentCredential}
+                    disabled={
+                      isProcessing ||
+                      !presentationData.verifierAID ||
+                      !presentationData.selectedCredential
+                    }
                     className="w-full"
                   >
                     <Send className="h-4 w-4 mr-2" />
-                    {isProcessing ? "Presenting Credential..." : "Present Credential"}
+                    {isProcessing
+                      ? "Presenting Credential..."
+                      : "Present Credential"}
                   </Button>
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            <TabsContent value="notifications" className="space-y-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Notifications</CardTitle>
-                  <CardDescription>
-                    IPEX protocol messages and credential updates
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    {notifications.map((notification) => (
-                      <div 
-                        key={notification.id} 
-                        className={`border rounded-lg p-4 ${!notification.read ? 'bg-blue-50 border-blue-200' : 'bg-gray-50'}`}
-                      >
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-1">
-                              <Badge variant={notification.type === "grant" ? "default" : "secondary"}>
-                                {notification.type.toUpperCase()}
-                              </Badge>
-                              <span className="text-sm text-slate-600">
-                                from {notification.from}
-                              </span>
-                            </div>
-                            <p className="text-sm font-medium mb-2">{notification.message}</p>
-                            <p className="text-xs text-slate-500">
-                              {new Date(notification.timestamp).toLocaleString()}
-                            </p>
-                          </div>
-                          {!notification.read && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => markNotificationRead(notification.id)}
-                            >
-                              Mark Read
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
                 </CardContent>
               </Card>
             </TabsContent>
@@ -357,25 +308,29 @@ const Holder = () => {
                 <CardHeader>
                   <CardTitle>Holder Configuration</CardTitle>
                   <CardDescription>
-                    Manage your holder settings and preferences
+                    Manage your holder settings and network configuration
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Admin URL</Label>
+                      <Input value={config.adminUrl} readOnly />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Boot URL</Label>
+                      <Input value={config.bootUrl} readOnly />
+                    </div>
+                  </div>
                   <div className="space-y-2">
                     <Label>AID Alias</Label>
                     <Input value={holderData.alias} readOnly />
                   </div>
-                  <div className="grid grid-cols-2 gap-4 p-4 bg-green-50 rounded-lg">
-                    <div>
-                      <span className="text-sm text-green-700">Total Credentials:</span>
-                      <div className="font-semibold text-green-800">{credentials.length}</div>
-                    </div>
-                    <div>
-                      <span className="text-sm text-green-700">Total Presentations:</span>
-                      <div className="font-semibold text-green-800">
-                        {credentials.reduce((sum, cred) => sum + cred.presentations, 0)}
-                      </div>
-                    </div>
+                  <div className="flex items-center gap-2 p-4 bg-green-50 rounded-lg">
+                    <CheckCircle className="h-5 w-5 text-green-600" />
+                    <span className="text-green-700">
+                      Connected to KERI network
+                    </span>
                   </div>
                 </CardContent>
               </Card>
