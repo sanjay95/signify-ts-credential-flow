@@ -50,6 +50,8 @@ import {
   IPEX_OFFER_ROUTE,
   SCHEMA_SERVER_HOST,
 } from "../utils/utils";
+import { getItem, setItem } from "@/utils/db";
+import { set } from "date-fns";
 
 const Issuer = () => {
   const navigate = useNavigate();
@@ -57,6 +59,12 @@ const Issuer = () => {
   const { toast } = useToast();
   const [isConnected, setIsConnected] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [schemaSaid, setSchemaSaid] = useState(
+    "EGUPiCVO73M9worPwR3PfThAtC0AJnH5ZgwsXf6TzbVK"
+  );
+  const [schemaOOBI, setSchemaOOBI] = useState(
+    "http://localhost:7723/oobi/EGUPiCVO73M9worPwR3PfThAtC0AJnH5ZgwsXf6TzbVK"
+  );
 
   // Get config from navigation state
   const [config, setConfig] = useState({
@@ -73,7 +81,29 @@ const Issuer = () => {
   const [issuerData, setIssuerData] = useState({
     alias: "issuerAid",
     registryName: "issuerRegistry",
+    issuerAid: "",
+    issuerOOBI: "",
+    issuerBran: "",
+    registrySaid: "",
   });
+
+  const [issuerClient, setIssuerClient] = useState(null);
+
+  useEffect(() => {
+    const loadData = async () => {
+      const saved = await getItem<any>("issuer-data");
+      if (saved) {
+        setIssuerData(saved);
+      }
+    };
+    loadData();
+  }, []);
+
+  useEffect(() => {
+    if (issuerData) {
+      setItem("issuer-data", issuerData);
+    }
+  }, [issuerData]);
 
   const [credentialData, setCredentialData] = useState({
     eventName: "GLEIF Summit",
@@ -81,6 +111,7 @@ const Issuer = () => {
     validDate: "2026-10-01",
     holderAID: "",
   });
+  const [holderAid, setHolderAid] = useState("");
 
   const [credentials, setCredentials] = useState([
     {
@@ -99,20 +130,104 @@ const Issuer = () => {
 
   const handleConnect = async () => {
     setIsProcessing(true);
-    // Simulate client initialization
-    setTimeout(() => {
-      setIsConnected(true);
+    console.log("Creating Issuer...");
+    try {
+      const issuerBran = randomPasscode();
+      const issuerAidAlias = issuerData.alias || "issuerAid";
+      const { client: issuerClient } = await initializeAndConnectClient(
+        issuerBran,
+        config.adminUrl,
+        config.bootUrl
+      );
+      setIssuerClient(issuerClient);
+      console.log("Issuer client initialized:");
+      if (!issuerData.issuerAid) {
+        const { aid: issuerAid } = await createNewAID(
+          issuerClient,
+          issuerAidAlias,
+          DEFAULT_IDENTIFIER_ARGS
+        );
+        console.log("Issuer AID created:", issuerAid);
+
+        console.log("Adding Agent role to AID...");
+        await addEndRoleForAID(issuerClient, issuerAidAlias, ROLE_AGENT);
+        const issuerOOBI = await generateOOBI(
+          issuerClient,
+          issuerAidAlias,
+          ROLE_AGENT
+        );
+        console.log("Issuer OOBI generated:", issuerOOBI);
+
+        console.log("Creating Credential Registry...");
+
+        const { registrySaid: registrySaid } = await createCredentialRegistry(
+          issuerClient,
+          issuerAidAlias,
+          issuerData.registryName
+        );
+        console.log("Credential Registry created:", registrySaid);
+        setIssuerData({
+          ...issuerData,
+          issuerAid: issuerAid,
+          issuerOOBI: issuerOOBI,
+          issuerBran: issuerBran,
+          registrySaid: registrySaid,
+        });
+      }
+
       setIsProcessing(false);
+      setIsConnected(true);
       toast({
-        title: "Connected Successfully",
+        title: "Connected to KERI Network",
         description: "Issuer client initialized and connected to KERI network",
       });
-    }, 2000);
+    } catch (error) {
+      console.error("Error connecting issuer client:", error);
+      setIsProcessing(false);
+      toast({
+        title: "ERROR",
+        description: "Failed to connect to KERI network or present credential",
+      });
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   const handleIssueCredential = async () => {
     setIsProcessing(true);
-    // Simulate credential issuance
+    console.log("issuing credential to holder");
+    if (!holderAid) {
+      toast({
+        title: "Error",
+        description: "Holder AID is required to issue a credential",
+        variant: "destructive",
+      });
+      setIsProcessing(false);
+      return;
+    }
+    const { credentialSaid: credentialSaid } = await issueCredential(
+      issuerClient,
+      issuerData.issuerAid,
+      issuerData.registrySaid,
+      schemaSaid,
+      holderAid,
+      credentialData
+    );
+
+    console.log("Credential issued with SAID:", credentialSaid);
+    const credential = await issuerClient.credentials().get(credentialSaid);
+
+    console.log("Credential details:", credential);
+    console.log("granting credential to holder");
+    const grantResponse = await ipexGrantCredential(
+      issuerClient,
+      issuerData.alias,
+      holderAid,
+      credential
+    );
+
+    console.log("Issuer created and granted credential.");
+
     setTimeout(() => {
       const newCredential = {
         id: `cred-${Date.now()}`,
@@ -326,20 +441,15 @@ const Issuer = () => {
                       <Label htmlFor="holderAID">Holder AID</Label>
                       <Input
                         id="holderAID"
-                        value={credentialData.holderAID}
-                        onChange={(e) =>
-                          setCredentialData({
-                            ...credentialData,
-                            holderAID: e.target.value,
-                          })
-                        }
+                        value={holderAid}
+                        onChange={(e) => setHolderAid(e.target.value)}
                         placeholder="Enter holder's AID"
                       />
                     </div>
                   </div>
                   <Button
                     onClick={handleIssueCredential}
-                    disabled={isProcessing || !credentialData.holderAID}
+                    disabled={isProcessing || !holderAid}
                     className="w-full"
                   >
                     <Send className="h-4 w-4 mr-2" />
