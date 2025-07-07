@@ -64,8 +64,9 @@ const Issuer = () => {
     "EGUPiCVO73M9worPwR3PfThAtC0AJnH5ZgwsXf6TzbVK"
   );
   const [schemaOOBI, setSchemaOOBI] = useState(
-    "http://localhost:7723/oobi/EGUPiCVO73M9worPwR3PfThAtC0AJnH5ZgwsXf6TzbVK"
+    "http://vlei-server:7723/oobi/EGUPiCVO73M9worPwR3PfThAtC0AJnH5ZgwsXf6TzbVK"
   );
+  const [isHolderConnected, setIsHolderConnected] = useState(false);
 
   // Get config from navigation state
   const [config, setConfig] = useState({
@@ -157,6 +158,7 @@ const Issuer = () => {
           ROLE_AGENT
         );
         console.log("Issuer OOBI generated:", issuerOOBI);
+        setItem("issuer-oobi", issuerOOBI);
 
         console.log("Creating Credential Registry...");
 
@@ -168,9 +170,9 @@ const Issuer = () => {
         console.log("Credential Registry created:", registrySaid);
         setIssuerData({
           ...issuerData,
+          issuerBran: issuerBran,
           issuerAid: issuerAid,
           issuerOOBI: issuerOOBI,
-          issuerBran: issuerBran,
           registrySaid: registrySaid,
         });
       }
@@ -206,9 +208,14 @@ const Issuer = () => {
         setIsProcessing(false);
         return;
       }
+      console.log("Issuer Data:", issuerData);
+      await resolveOOBI(issuerClient, schemaOOBI, "schemaContact");
+      const holderOOBI = (await getItem("holder-oobi")) as string;
+      await resolveOOBI(issuerClient, holderOOBI, "holderContact");
+      console.log("Schema resolved from OOBI:", schemaOOBI);
       const { credentialSaid: credentialSaid } = await issueCredential(
         issuerClient,
-        issuerData.issuerAid,
+        issuerData.alias,
         issuerData.registrySaid,
         schemaSaid,
         holderAid,
@@ -365,7 +372,7 @@ const Issuer = () => {
               <PasscodeDialog
                 onPasscodeSubmit={handleConnect}
                 isProcessing={isProcessing}
-                entityType="Issuer"
+                entityType="issuer"
               />
             </CardContent>
           </Card>

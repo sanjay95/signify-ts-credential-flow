@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,10 +18,14 @@ import { getItem, setItem } from "@/utils/db";
 interface PasscodeDialogProps {
   onPasscodeSubmit: (passcode: string) => void;
   isProcessing: boolean;
-  entityType: "Issuer" | "Holder" | "Verifier";
+  entityType: "issuer" | "holder" | "verifier";
 }
 
-export const PasscodeDialog = ({ onPasscodeSubmit, isProcessing, entityType }: PasscodeDialogProps) => {
+export const PasscodeDialog = ({
+  onPasscodeSubmit,
+  isProcessing,
+  entityType,
+}: PasscodeDialogProps) => {
   const { toast } = useToast();
   const [passcode, setPasscode] = useState("");
   const [showPasscode, setShowPasscode] = useState(false);
@@ -53,7 +56,9 @@ export const PasscodeDialog = ({ onPasscodeSubmit, isProcessing, entityType }: P
 
   const handleSavePasscode = async () => {
     try {
-      await setItem(`${entityType.toLowerCase()}-passcode`, generatedPasscode);
+      const saved = await getItem<any>(`${entityType.toLowerCase()}-data`);
+      const updated = { ...saved, [`${entityType}Bran`]: generatedPasscode };
+      await setItem(`${entityType.toLowerCase()}-data`, updated);
       toast({
         title: "Saved to Browser",
         description: "Passcode has been saved to your browser storage",
@@ -107,7 +112,11 @@ export const PasscodeDialog = ({ onPasscodeSubmit, isProcessing, entityType }: P
               className="absolute right-2 top-1/2 transform -translate-y-1/2 h-6 w-6"
               onClick={() => setShowPassword(!showPassword)}
             >
-              {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              {showPassword ? (
+                <EyeOff className="h-4 w-4" />
+              ) : (
+                <Eye className="h-4 w-4" />
+              )}
             </Button>
           </div>
         </div>
@@ -137,7 +146,9 @@ export const PasscodeDialog = ({ onPasscodeSubmit, isProcessing, entityType }: P
                 Please store it in a secure online or offline location.
                 <br />
                 <br />
-                <strong>We CANNOT retrieve your passcode if you lose it.</strong>
+                <strong>
+                  We CANNOT retrieve your passcode if you lose it.
+                </strong>
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4">
@@ -154,23 +165,26 @@ export const PasscodeDialog = ({ onPasscodeSubmit, isProcessing, entityType }: P
                     </div>
                   </div>
                   <div className="flex gap-2">
-                    <Button 
-                      variant="outline" 
+                    <Button
+                      variant="outline"
                       onClick={handleCopyPasscode}
                       className="flex-1"
                     >
                       <Copy className="h-4 w-4 mr-2" />
                       Copy
                     </Button>
-                    <Button 
-                      variant="outline" 
+                    <Button
+                      variant="outline"
                       onClick={handleSavePasscode}
                       className="flex-1"
                     >
                       Save to Browser
                     </Button>
                   </div>
-                  <Button onClick={handleUseGeneratedPasscode} className="w-full">
+                  <Button
+                    onClick={handleUseGeneratedPasscode}
+                    className="w-full"
+                  >
                     Use This Passcode
                   </Button>
                 </div>

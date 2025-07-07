@@ -114,8 +114,8 @@ export async function isServiceHealthy(
 }
 
 // Default KERIA connection parameters (adjust as needed for your environment)
-export const DEFAULT_ADMIN_URL = "http://keria:3901";
-export const DEFAULT_BOOT_URL = "http://keria:3903";
+export const DEFAULT_ADMIN_URL = "http://localhost:3901";
+export const DEFAULT_BOOT_URL = "http://localhost:3903";
 export const DEFAULT_TIMEOUT_MS = 30000; // 30 seconds for operations
 export const DEFAULT_DELAY_MS = 5000; // 5 seconds for operations
 export const DEFAULT_RETRIES = 5; // For retries
@@ -723,7 +723,7 @@ export async function waitForAndGetNotification(
       // List notifications, filtering for unread IPEX_GRANT_ROUTE messages.
       let allNotifications = await client.notifications().list();
       notifications = allNotifications.notes.filter(
-        (n) => n.a.r === expectedRoute && n.r === false // n.r is 'read' status
+        (n) => n.a.r === expectedRoute //&& n.r === false // n.r is 'read' status
       );
       if (notifications.length === 0) {
         throw new Error("Notification not found yet."); // Throw error to trigger retry

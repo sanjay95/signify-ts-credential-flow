@@ -62,6 +62,7 @@ const Holder = () => {
   const [isConnected, setIsConnected] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isCheckingIncoming, setIsCheckingIncoming] = useState(false);
+  const [isIssuerResolved, setIsIssuerResolved] = useState(false);
 
   const [holderData, setHolderData] = useState({
     alias: "holderAid",
@@ -151,11 +152,12 @@ const Holder = () => {
           ROLE_AGENT
         );
         console.log("Holder OOBI generated:", holderOOBI);
+        setItem("holder-oobi", holderOOBI);
         setHolderData((prevData) => ({
           ...prevData,
+          holderBran: holderBran,
           holderAid: holderAid,
           holderOOBI: holderOOBI,
-          holderBran: holderBran,
         }));
       }
       setIsConnected(true);
@@ -182,6 +184,19 @@ const Holder = () => {
 
     setIsCheckingIncoming(true);
     try {
+      console.log(isIssuerResolved, "Checking if issuer is resolved...");
+      if (!isIssuerResolved) {
+        console.log("Resolving issuer OOBI...");
+        const issuerOOBI = await getItem("issuer-oobi");
+        if (issuerOOBI) {
+          await resolveOOBI(
+            holderClient,
+            issuerOOBI as string,
+            "issuerContact"
+          );
+          setIsIssuerResolved(true);
+        }
+      }
       console.log("Holder checking for incoming credentials...");
       const grantNotifications = await waitForAndGetNotification(
         holderClient,
@@ -365,7 +380,7 @@ const Holder = () => {
               <PasscodeDialog
                 onPasscodeSubmit={handleConnect}
                 isProcessing={isProcessing}
-                entityType="Holder"
+                entityType="holder"
               />
             </CardContent>
           </Card>
