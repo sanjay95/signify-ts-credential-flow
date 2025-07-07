@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-import { useLocation } from "react-router-dom";
 import {
   Card,
   CardContent,
@@ -21,7 +20,7 @@ import {
   RotateCcw,
   CheckCircle,
 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { randomPasscode, Serder } from "signify-ts";
 import {
@@ -62,7 +61,7 @@ const Issuer = () => {
   // Get config from navigation state
   const [config, setConfig] = useState({
     adminUrl: "http://localhost:3901",
-    bootUrl: "http://localhost:3903"
+    bootUrl: "http://localhost:3903",
   });
 
   useEffect(() => {
