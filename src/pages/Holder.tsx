@@ -106,6 +106,10 @@ const Holder = () => {
     }
   }, [isConnected, holderClient]);
 
+  useEffect(() => {
+    
+  }, [incomingCredentials]);
+
   const [credentials, setCredentials] = useState([
     {
       id: "cred-001",
@@ -204,12 +208,12 @@ const Holder = () => {
 
     setIsCheckingIncoming(true);
     try {
-      await resolveOOBI(holderClient, schemaOOBI, "schemaContact");
-      console.log(isIssuerResolved, "Checking if issuer is resolved...");
+      // Ensure necessary OOBIs are resolved before checking notifications.
+      // This could be optimized to only run if needed.
       if (!isIssuerResolved) {
-        console.log("Resolving issuer OOBI...");
         const issuerOOBI = await getItem("issuer-oobi");
         if (issuerOOBI) {
+          console.log("Resolving issuer OOBI...");
           await resolveOOBI(
             holderClient,
             issuerOOBI as string,
@@ -218,42 +222,46 @@ const Holder = () => {
           setIsIssuerResolved(true);
         }
       }
+
       console.log("Holder checking for incoming credentials...");
       const grantNotifications = await waitForAndGetNotification(
         holderClient,
         IPEX_GRANT_ROUTE
       );
 
-      if (grantNotifications && grantNotifications.length > 0) {
-        console.log("Found incoming grant notifications:", grantNotifications);
-        const grantExchanges = await Promise.all(
-          grantNotifications.map((notification) => {
-            return holderClient.exchanges().get(notification.a.d);
-          })
-        );
-
-        console.log("Grant exchange details:", grantExchanges[0]);
-
-        const newIncoming = grantExchanges.map((grantExchange, index) => ({
-          id: `incoming-${Date.now()}-${index}`,
-          notificationId: grantExchange.exn.d,
-          grantSaid: grantExchange.exn.d,
-          receivedAt: grantExchange.exn.dt,
-          status: "pending",
-          issuer: grantExchange.exn.i || "Unknown Issuer",
-        }));
-
-        setIncomingCredentials(newIncoming);
-        console.log("New incoming credentials:", newIncoming);
-        console.log(`Found ${newIncoming.length} incoming credentials`);
-
-        if (newIncoming.length > 0) {
-          toast({
-            title: "Incoming Credentials",
-            description: `Found ${newIncoming.length} new credential(s) to admit`,
-          });
-        }
+      if (grantNotifications.length === 0) {
+        console.log("No new grant notifications found.");
+        return;
       }
+
+      console.log(
+        `Found ${grantNotifications.length} incoming grant notification(s).`
+      );
+
+      const newIncomingPromises = grantNotifications.map(
+        async (notification) => {
+          const grantExchange = await holderClient
+            .exchanges()
+            .get(notification.a.d);
+          return {
+            id: notification.i, // Use the notification ID as the unique key
+            notificationId: notification.i, // Correctly assign the notification ID
+            grantSaid: grantExchange.exn.d,
+            receivedAt: grantExchange.exn.dt,
+            status: "pending",
+            issuer: grantExchange.exn.i || "Unknown Issuer",
+          };
+        }
+      );
+
+      const newIncoming = await Promise.all(newIncomingPromises);
+
+      // Filter out credentials that are already in the incoming list to avoid duplicates
+      setIncomingCredentials((prev) => {
+        const existingIds = new Set(prev.map((c) => c.id));
+        const uniqueNew = newIncoming.filter((c) => !existingIds.has(c.id));
+        return [...prev, ...uniqueNew];
+      });
     } catch (error) {
       console.log("No incoming credentials found or error:", error.message);
     } finally {
@@ -292,8 +300,6 @@ const Holder = () => {
         description: "Credential has been successfully admitted to your wallet",
       });
 
-      // Refresh the main credentials list
-      // In a real implementation, you would fetch the updated credentials from the client
       setTimeout(() => {
         // Remove from incoming after successful admit
         setIncomingCredentials((prev) =>
