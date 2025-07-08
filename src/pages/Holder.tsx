@@ -107,7 +107,24 @@ const Holder = () => {
   }, [isConnected, holderClient]);
 
   useEffect(() => {
-    
+    const fetchCredentials = async () => {
+      const matchingCredentials = await holderClient.credentials().list();
+      console.log(
+        "Fetched credentials from holder client",
+        matchingCredentials
+      );
+      setCredentials(
+        matchingCredentials.map((cred) => ({
+          id: cred.sad.d,
+          said: cred.sad.d,
+          status: cred.status || "received",
+          issuer: cred.sad.i,
+          receivedDate: cred.sad.a.dt,
+          claims: cred.sad.a,
+        }))
+      );
+    };
+    fetchCredentials();
   }, [incomingCredentials]);
 
   const [credentials, setCredentials] = useState([
