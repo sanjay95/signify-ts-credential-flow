@@ -128,7 +128,7 @@ const Holder = () => {
 
   const handleConnect = async (userPasscode: string) => {
     setIsProcessing(true);
-    console.log("Creating Holder...");
+    console.log("Connecting Holder...");
     try {
       const holderBran = userPasscode;
       const holderAidAlias = holderData.alias || "holderAid";
@@ -140,45 +140,59 @@ const Holder = () => {
         );
       setHolderClient(holderClient);
       console.log("Holder client connected:", holderClientState);
-      console.log("Holder client initialized:");
-      if (!holderData.holderOOBI) {
-        const { aid: holderAid } = await createNewAID(
+
+      let holderAid, holderOOBI;
+
+      try {
+        // Check if the AID already exists for this client
+        holderAid = await holderClient.identifiers().get(holderAidAlias);
+        console.log("Existing Holder AID found:", holderAid);
+
+        holderOOBI = await generateOOBI(
           holderClient,
-          holderData.alias,
+          holderAidAlias,
+          ROLE_AGENT
+        );
+      } catch (error) {
+        // If getting AID fails, it likely doesn't exist, so create it.
+        console.log("No existing Holder AID found, creating new one...");
+        const { aid: newHolderAid } = await createNewAID(
+          holderClient,
+          holderAidAlias,
           DEFAULT_IDENTIFIER_ARGS
         );
+        holderAid = newHolderAid;
         console.log("Holder AID created:", holderAid);
 
         console.log("Adding Agent role to AID...");
         await addEndRoleForAID(holderClient, holderAidAlias, ROLE_AGENT);
-        const holderOOBI = await generateOOBI(
+        holderOOBI = await generateOOBI(
           holderClient,
           holderAidAlias,
           ROLE_AGENT
         );
         console.log("Holder OOBI generated:", holderOOBI);
-        setItem("holder-oobi", holderOOBI);
-        setHolderData((prevData) => ({
-          ...prevData,
-          holderBran: holderBran,
-          holderAid: holderAid,
-          holderOOBI: holderOOBI,
-        }));
       }
 
-      setIsConnected(true);
-      setIsProcessing(false);
+      setItem("holder-oobi", holderOOBI);
+      setHolderData((prevData) => ({
+        ...prevData,
+        holderBran: holderBran,
+        holderAid: holderAid.prefix || holderAid.d,
+        holderOOBI: holderOOBI,
+      }));
 
+      setIsConnected(true);
       toast({
         title: "Connected to KERI Network",
-        description: "Holder client initialized and connected to KERI network",
+        description: "Holder client initialized and connected.",
       });
     } catch (error) {
       console.error("Error connecting holder client:", error);
-      setIsProcessing(false);
       toast({
-        title: "ERROR",
-        description: "Failed to connect to KERI network or present credential",
+        title: "Connection Error",
+        description: "Failed to connect to KERI network or create identity.",
+        variant: "destructive",
       });
     } finally {
       setIsProcessing(false);

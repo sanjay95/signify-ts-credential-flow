@@ -131,7 +131,7 @@ const Issuer = () => {
 
   const handleConnect = async (userPasscode: string) => {
     setIsProcessing(true);
-    console.log("Creating Issuer...");
+    console.log("Connecting Issuer...");
     try {
       const issuerBran = userPasscode;
       const issuerAidAlias = issuerData.alias || "issuerAid";
@@ -143,84 +143,86 @@ const Issuer = () => {
         );
       setIssuerClient(issuerClient);
       console.log("Issuer client connected:", issuerClientState);
-      console.log("Issuer client initialized:");
-      if (!issuerClientState?.controller?.state?.i) {
-        const { aid: issuerAid } = await createNewAID(
+
+      let issuerAid, registrySaid, issuerOOBI;
+
+      try {
+        // Check if the AID already exists for this client
+        issuerAid = await issuerClient.identifiers().get(issuerAidAlias);
+        console.log("Existing Issuer AID found:", issuerAid);
+
+        // Check if the registry exists
+        const registries = await issuerClient.registries().list(issuerAidAlias);
+        if (registries.length > 0) {
+          registrySaid = registries[0].regk;
+          console.log("Existing registry found:", registrySaid);
+        } else {
+          console.log("No existing registry found, creating new one...");
+          const regResult = await createCredentialRegistry(
+            issuerClient,
+            issuerAidAlias,
+            issuerData.registryName
+          );
+          registrySaid = regResult.registrySaid;
+          console.log("New registry created:", registrySaid);
+        }
+
+        issuerOOBI = await generateOOBI(
+          issuerClient,
+          issuerAidAlias,
+          ROLE_AGENT
+        );
+      } catch (error) {
+        // If getting AID fails, it likely doesn't exist, so create it.
+        console.log("No existing Issuer AID found, creating new one...");
+        const { aid: newIssuerAid } = await createNewAID(
           issuerClient,
           issuerAidAlias,
           DEFAULT_IDENTIFIER_ARGS
         );
+        issuerAid = newIssuerAid;
         console.log("Issuer AID created:", issuerAid);
 
         console.log("Adding Agent role to AID...");
         await addEndRoleForAID(issuerClient, issuerAidAlias, ROLE_AGENT);
-        const issuerOOBI = await generateOOBI(
+
+        issuerOOBI = await generateOOBI(
           issuerClient,
           issuerAidAlias,
           ROLE_AGENT
         );
         console.log("Issuer OOBI generated:", issuerOOBI);
-        setItem("issuer-oobi", issuerOOBI);
 
         console.log("Creating Credential Registry...");
-
-        const { registrySaid: registrySaid } = await createCredentialRegistry(
+        const regResult = await createCredentialRegistry(
           issuerClient,
           issuerAidAlias,
           issuerData.registryName
         );
+        registrySaid = regResult.registrySaid;
         console.log("Credential Registry created:", registrySaid);
-        setIssuerData({
-          ...issuerData,
-          issuerBran: issuerBran,
-          issuerAid: issuerAid,
-          issuerOOBI: issuerOOBI,
-          registrySaid: registrySaid,
-        });
-      } else {
-        const registry = await issuerClient.registries().list(issuerData.alias);
-        console.log("Registry found:", registry);
-        var registrySaid = "";
-        if (registry.length === 0) {
-          console.log(
-            "No existing registry found for issuer, creating new one..."
-          );
-
-          const { registrySaid: registrySaid } = await createCredentialRegistry(
-            issuerClient,
-            issuerAidAlias,
-            issuerData.registryName
-          );
-        } else {
-          registrySaid = registry[0].regk;
-        }
-        const issuerOOBI = await generateOOBI(
-          issuerClient,
-          issuerAidAlias,
-          ROLE_AGENT
-        );
-        setItem("issuer-oobi", issuerOOBI);
-        setIssuerData({
-          ...issuerData,
-          issuerBran: issuerBran,
-          issuerAid: issuerClientState?.controller?.state?.i,
-          issuerOOBI: issuerOOBI,
-          registrySaid: registrySaid,
-        });
       }
 
-      setIsProcessing(false);
+      setItem("issuer-oobi", issuerOOBI);
+      setIssuerData((prevData) => ({
+        ...prevData,
+        issuerBran: issuerBran,
+        issuerAid: issuerAid.prefix || issuerAid.d,
+        issuerOOBI: issuerOOBI,
+        registrySaid: registrySaid,
+      }));
+
       setIsConnected(true);
       toast({
         title: "Connected to KERI Network",
-        description: "Issuer client initialized and connected to KERI network",
+        description: "Issuer client initialized and connected.",
       });
     } catch (error) {
       console.error("Error connecting issuer client:", error);
-      setIsProcessing(false);
       toast({
-        title: "ERROR",
-        description: "Failed to connect to KERI network or present credential",
+        title: "Connection Error",
+        description: "Failed to connect to KERI network or create identity.",
+        variant: "destructive",
       });
     } finally {
       setIsProcessing(false);
