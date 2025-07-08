@@ -107,6 +107,7 @@ const Holder = () => {
   }, [isConnected, holderClient]);
 
   useEffect(() => {
+    if (!holderClient) return;
     const fetchCredentials = async () => {
       const matchingCredentials = await holderClient.credentials().list();
       console.log(
@@ -117,30 +118,21 @@ const Holder = () => {
         matchingCredentials.map((cred) => ({
           id: cred.sad.d,
           said: cred.sad.d,
-          status: cred.status || "received",
+          status: cred.status.et || "received",
           issuer: cred.sad.i,
           receivedDate: cred.sad.a.dt,
-          claims: cred.sad.a,
+          claims: {
+            eventName: cred.sad.a.eventName,
+            accessLevel: cred.sad.a.accessLevel,
+            validDate: cred.sad.a.validDate,
+          },
         }))
       );
     };
     fetchCredentials();
-  }, [incomingCredentials]);
+  }, [holderClient, incomingCredentials]);
 
-  const [credentials, setCredentials] = useState([
-    {
-      id: "cred-001",
-      said: "EGUPiCVO73M9worPwR3PfThAtC0AJnH5ZgwsXf6TzbVK",
-      status: "received",
-      issuer: "issuer123",
-      receivedDate: "2024-01-15",
-      claims: {
-        eventName: "GLEIF Summit",
-        accessLevel: "staff",
-        validDate: "2026-10-01",
-      },
-    },
-  ]);
+  const [credentials, setCredentials] = useState([]);
 
   const [presentationData, setPresentationData] = useState({
     verifierAID: "",
