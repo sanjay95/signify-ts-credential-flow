@@ -135,14 +135,16 @@ const Issuer = () => {
     try {
       const issuerBran = userPasscode;
       const issuerAidAlias = issuerData.alias || "issuerAid";
-      const { client: issuerClient } = await initializeAndConnectClient(
-        issuerBran,
-        config.adminUrl,
-        config.bootUrl
-      );
+      const { client: issuerClient, clientState: issuerClientState } =
+        await initializeAndConnectClient(
+          issuerBran,
+          config.adminUrl,
+          config.bootUrl
+        );
       setIssuerClient(issuerClient);
+      console.log("Issuer client connected:", issuerClientState);
       console.log("Issuer client initialized:");
-      if (!issuerData.issuerAid) {
+      if (!issuerClientState?.controller?.state?.i) {
         const { aid: issuerAid } = await createNewAID(
           issuerClient,
           issuerAidAlias,
@@ -172,6 +174,36 @@ const Issuer = () => {
           ...issuerData,
           issuerBran: issuerBran,
           issuerAid: issuerAid,
+          issuerOOBI: issuerOOBI,
+          registrySaid: registrySaid,
+        });
+      } else {
+        const registry = await issuerClient.registries().list(issuerData.alias);
+        console.log("Registry found:", registry);
+        var registrySaid = "";
+        if (registry.length === 0) {
+          console.log(
+            "No existing registry found for issuer, creating new one..."
+          );
+
+          const { registrySaid: registrySaid } = await createCredentialRegistry(
+            issuerClient,
+            issuerAidAlias,
+            issuerData.registryName
+          );
+        } else {
+          registrySaid = registry[0].regk;
+        }
+        const issuerOOBI = await generateOOBI(
+          issuerClient,
+          issuerAidAlias,
+          ROLE_AGENT
+        );
+        setItem("issuer-oobi", issuerOOBI);
+        setIssuerData({
+          ...issuerData,
+          issuerBran: issuerBran,
+          issuerAid: issuerClientState?.controller?.state?.i,
           issuerOOBI: issuerOOBI,
           registrySaid: registrySaid,
         });

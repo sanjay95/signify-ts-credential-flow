@@ -63,6 +63,9 @@ const Holder = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [isCheckingIncoming, setIsCheckingIncoming] = useState(false);
   const [isIssuerResolved, setIsIssuerResolved] = useState(false);
+  const [schemaOOBI, setSchemaOOBI] = useState(
+    "http://vlei-server:7723/oobi/EGUPiCVO73M9worPwR3PfThAtC0AJnH5ZgwsXf6TzbVK"
+  );
 
   const [holderData, setHolderData] = useState({
     alias: "holderAid",
@@ -98,7 +101,7 @@ const Holder = () => {
       // Set up periodic checking every 30 seconds
       const interval = setInterval(() => {
         checkIncomingCredentials();
-      }, 30000);
+      }, 300000);
       return () => clearInterval(interval);
     }
   }, [isConnected, holderClient]);
@@ -129,14 +132,16 @@ const Holder = () => {
     try {
       const holderBran = userPasscode;
       const holderAidAlias = holderData.alias || "holderAid";
-      const { client: holderClient } = await initializeAndConnectClient(
-        holderBran,
-        config.adminUrl,
-        config.bootUrl
-      );
+      const { client: holderClient, clientState: holderClientState } =
+        await initializeAndConnectClient(
+          holderBran,
+          config.adminUrl,
+          config.bootUrl
+        );
       setHolderClient(holderClient);
+      console.log("Holder client connected:", holderClientState);
       console.log("Holder client initialized:");
-      if (!holderData.holderAid) {
+      if (!holderData.holderOOBI) {
         const { aid: holderAid } = await createNewAID(
           holderClient,
           holderData.alias,
@@ -160,6 +165,7 @@ const Holder = () => {
           holderOOBI: holderOOBI,
         }));
       }
+
       setIsConnected(true);
       setIsProcessing(false);
 
@@ -184,6 +190,7 @@ const Holder = () => {
 
     setIsCheckingIncoming(true);
     try {
+      await resolveOOBI(holderClient, schemaOOBI, "schemaContact");
       console.log(isIssuerResolved, "Checking if issuer is resolved...");
       if (!isIssuerResolved) {
         console.log("Resolving issuer OOBI...");
@@ -204,16 +211,26 @@ const Holder = () => {
       );
 
       if (grantNotifications && grantNotifications.length > 0) {
-        const newIncoming = grantNotifications.map((notification, index) => ({
+        console.log("Found incoming grant notifications:", grantNotifications);
+        const grantExchanges = await Promise.all(
+          grantNotifications.map((notification) => {
+            return holderClient.exchanges().get(notification.a.d);
+          })
+        );
+
+        console.log("Grant exchange details:", grantExchanges[0]);
+
+        const newIncoming = grantExchanges.map((grantExchange, index) => ({
           id: `incoming-${Date.now()}-${index}`,
-          notificationId: notification.i,
-          grantSaid: notification.a.d,
-          receivedAt: new Date().toISOString(),
+          notificationId: grantExchange.exn.d,
+          grantSaid: grantExchange.exn.d,
+          receivedAt: grantExchange.exn.dt,
           status: "pending",
-          issuer: notification.a.i || "Unknown Issuer",
+          issuer: grantExchange.exn.i || "Unknown Issuer",
         }));
 
         setIncomingCredentials(newIncoming);
+        console.log("New incoming credentials:", newIncoming);
         console.log(`Found ${newIncoming.length} incoming credentials`);
 
         if (newIncoming.length > 0) {

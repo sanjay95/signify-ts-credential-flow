@@ -723,7 +723,7 @@ export async function waitForAndGetNotification(
       // List notifications, filtering for unread IPEX_GRANT_ROUTE messages.
       let allNotifications = await client.notifications().list();
       notifications = allNotifications.notes.filter(
-        (n) => n.a.r === expectedRoute //&& n.r === false // n.r is 'read' status
+        (n) => n.a.r === expectedRoute && n.r === false // n.r is 'read' status
       );
       if (notifications.length === 0) {
         throw new Error("Notification not found yet."); // Throw error to trigger retry
@@ -767,6 +767,8 @@ export async function ipexAdmitGrant(
     `AID "${senderAidAlias}" admitting IPEX grant "${grantSaid}" from AID "${recipientAidPrefix}"...`
   );
   try {
+    console.log(`Creating admit for grant "${grantSaid}"...`);
+    // Create the admit message
     const [admit, sigs, aend] = await client.ipex().admit({
       senderName: senderAidAlias,
       message: message,
@@ -775,6 +777,8 @@ export async function ipexAdmitGrant(
       datetime: createTimestamp(),
     });
 
+    console.log(`Submitting admit operation for grant "${grantSaid}"...`);
+    // Submit the admit operation
     const admitOperationDetails = await client
       .ipex()
       .submitAdmit(senderAidAlias, admit, sigs, aend, [recipientAidPrefix]);
