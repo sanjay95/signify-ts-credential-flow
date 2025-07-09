@@ -115,44 +115,49 @@ const Holder = () => {
   }, [isConnected, holderClient]);
 
   useEffect(() => {
-    if (!holderClient) return;
-    const fetchCredentials = async () => {
-      const matchingCredentials = await holderClient.credentials().list();
-      console.log(
-        "Fetched credentials from holder client",
-        matchingCredentials
-      );
-      setCredentials(
-        matchingCredentials.map((cred) => ({
-          id: cred.sad.d,
-          said: cred.sad.d,
-          status: cred.status.et || "received",
-          issuer: cred.sad.i,
-          receivedDate: cred.sad.a.dt,
-          claims: {
-            eventName: cred.sad.a.eventName,
-            accessLevel: cred.sad.a.accessLevel,
-            validDate: cred.sad.a.validDate,
+    const getCredential = async () => {
+      const credentials = await holderClient?.credentials()?.list();
+
+      console.log("------ ---- Fetched credential:", credentials);
+      if (!credentials || credentials.length === 0) {
+        console.log("No credentials found for this holder.");
+        return;
+      }
+      setCredentials([]);
+      credentials.map((cred) => {
+        setCredentials((prev) => [
+          ...prev,
+          {
+            id: cred.sad.d,
+            said: cred.sad.d,
+            status: cred.status.et || "received",
+            issuer: cred.sad.i,
+            receivedDate: cred.sad.a.dt,
+            claims: {
+              eventName: cred.sad.a.eventName,
+              accessLevel: cred.sad.a.accessLevel,
+              validDate: cred.sad.a.validDate,
+            },
           },
-        }))
-      );
+        ]);
+      });
     };
-    fetchCredentials();
-  }, [holderClient, incomingCredentials]);
+    getCredential();
+  }, [incomingCredentials, holderData]);
 
   const [credentials, setCredentials] = useState([]);
 
   const [presentationData, setPresentationData] = useState({
-    verifierAID: "",
+    verifierOOBI: "",
     selectedCredential: "",
   });
 
   const handleConnect = async (userPasscode: string, isReconnect = false) => {
     setIsProcessing(true);
     if (isReconnect) {
-      console.log("Reconnecting Issuer...");
+      console.log("Reconnecting holder...");
     } else {
-      console.log("Connecting Issuer...");
+      console.log("Connecting holder...");
     }
     try {
       const holderBran = userPasscode;
@@ -353,6 +358,53 @@ const Holder = () => {
 
   const handlePresentCredential = async () => {
     setIsProcessing(true);
+    const { verifierOOBI, selectedCredential } = presentationData;
+    // Extract the Verifier AID from the OOBI URL
+    let verifierAid = "";
+    try {
+      const parts = verifierOOBI.split("/oobi/");
+      if (parts.length > 1) {
+        verifierAid = parts[1].split("/")[0];
+      }
+    } catch (e) {
+      verifierAid = "";
+    }
+    if (!verifierAid) {
+      toast({
+        title: "Invalid Verifier OOBI",
+        description: "Please enter a valid Verifier OOBI URL",
+        variant: "destructive",
+      });
+      setIsProcessing(false);
+      return;
+    } else {
+      resolveOOBI(holderClient, verifierOOBI, "verifierContact").catch(
+        (error) => {
+          console.error("Error resolving Verifier OOBI:", error);
+          toast({
+            title: "ERROR",
+            description: "Failed to resolve Verifier OOBI",
+            variant: "destructive",
+          });
+          setIsProcessing(false);
+        }
+      );
+
+      console.log("selectedCredential", selectedCredential);
+      // Holder - get credential (with all its data)
+      const credential = await holderClient
+        .credentials()
+        .get(selectedCredential);
+
+      // Holder - Ipex grant
+      console.log("Granting credential from holder to issuer");
+      const grantResponse = await ipexGrantCredential(
+        holderClient,
+        holderData.alias,
+        verifierAid,
+        credential
+      );
+    }
     setTimeout(() => {
       setIsProcessing(false);
       toast({
@@ -647,17 +699,17 @@ const Holder = () => {
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="verifierAID">Verifier AID</Label>
+                    <Label htmlFor="verifierOOBI">Verifier OOBI</Label>
                     <Input
-                      id="verifierAID"
-                      value={presentationData.verifierAID}
+                      id="verifierOOBI"
+                      value={presentationData.verifierOOBI}
                       onChange={(e) =>
                         setPresentationData({
                           ...presentationData,
-                          verifierAID: e.target.value,
+                          verifierOOBI: e.target.value,
                         })
                       }
-                      placeholder="Enter verifier's AID"
+                      placeholder="Enter verifier's OOBI"
                     />
                   </div>
                   <div className="space-y-2">
@@ -684,7 +736,7 @@ const Holder = () => {
                     onClick={handlePresentCredential}
                     disabled={
                       isProcessing ||
-                      !presentationData.verifierAID ||
+                      !presentationData.verifierOOBI ||
                       !presentationData.selectedCredential
                     }
                     className="w-full"
