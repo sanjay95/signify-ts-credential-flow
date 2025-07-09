@@ -340,25 +340,33 @@ const Issuer = () => {
         let filter: { [x: string]: any } = { "-s": QVI_SCHEMA_SAID };
         const QviCredential = await issuerClient.credentials().list({ filter });
         console.log("QVI Credentials:", QviCredential);
-        console.log("sadify edge for GLIEF chain");
-        const leEdge = Saider.saidify({
-          // d: "",
-          qvi: {
-            n: QviCredential.sad.d,
-            s: QviCredential.sad.s,
-          },
-        })[1];
-
         console.log("sadify rules for GLIEF chain");
-        const leRules = Saider.saidify({
-          // d: "",
+        const rules = {
+          d: "",
           usageDisclaimer: {
             l: "Usage of a valid, unexpired, and non-revoked vLEI Credential, as defined in the associated Ecosystem Governance Framework, does not assert that the Legal Entity is trustworthy, honest, reputable in its business dealings, safe to do business with, or compliant with any laws or that an implied or expressly intended purpose will be fulfilled.",
           },
           issuanceDisclaimer: {
             l: "All information in a valid, unexpired, and non-revoked vLEI Credential, as defined in the associated Ecosystem Governance Framework, is accurate as of the date the validation process was complete. The vLEI Credential has been issued to the legal entity or person named in the vLEI Credential as the subject; and the qualified vLEI Issuer exercised reasonable care to perform the validation process set forth in the vLEI Ecosystem Governance Framework.",
           },
-        })[1];
+        };
+        console.log("rules", rules);
+
+        const leRules = Saider.saidify(rules)[1];
+        console.log("leRules", leRules);
+
+        console.log("sadify edge for GLIEF chain");
+        // console.log("QviCredential.sad.d", QviCredential.sad.d);
+        // console.log("QviCredential.sad.s", QviCredential.sad.s);
+        const edge = {
+          d: "",
+          qvi: {
+            n: QviCredential[0].sad.d,
+            s: QviCredential[0].sad.s,
+          },
+        };
+
+        const leEdge = Saider.saidify(edge)[1];
         console.log("sadifying done:");
         console.log("starting issuing QVI credential");
         credentialSaid = await issueCredential(
@@ -382,8 +390,13 @@ const Issuer = () => {
         );
       }
 
-      console.log("Credential issued with SAID:", credentialSaid);
-      const credential = await issuerClient.credentials().get(credentialSaid);
+      console.log(
+        "Credential issued with SAID:",
+        credentialSaid.credentialSaid || credentialSaid
+      );
+      const credential = await issuerClient
+        .credentials()
+        .get(credentialSaid.credentialSaid || credentialSaid);
       setNewCredential(true);
 
       console.log("Credential details:", credential);

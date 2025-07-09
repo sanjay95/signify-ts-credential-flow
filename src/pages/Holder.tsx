@@ -65,11 +65,14 @@ const Holder = () => {
   const [isInitializing, setIsInitializing] = useState(true);
   const [isCheckingIncoming, setIsCheckingIncoming] = useState(false);
   const [isIssuerResolved, setIsIssuerResolved] = useState(false);
-  const [schemaOOBI, setSchemaOOBI] = useState(
+  const [eventSchemaOOBI, setSchemaOOBI] = useState(
     "http://vlei-server:7723/oobi/EGUPiCVO73M9worPwR3PfThAtC0AJnH5ZgwsXf6TzbVK"
   );
-  const [schemaOOBI2, setSchemaOOBI2] = useState(
+  const [QVISchemaOOBI, setSchemaOOBI2] = useState(
     "http://vlei-server:7723/oobi/EBfdlu8R27Fbx-ehrqwImnK-8Cm79sqbAQ4MmvEAYqao"
+  );
+  const [LESchemaOOBI, setSchemaOOBI3] = useState(
+    "http://vlei-server:7723/oobi/ENPXp1vQzRF6JwIuS-mp2U8Uf1MoADoP_GqQ62VsDZWY"
   );
 
   const [holderData, setHolderData] = useState({
@@ -250,8 +253,9 @@ const Holder = () => {
     try {
       // Ensure necessary OOBIs are resolved before checking notifications.
       // This could be optimized to only run if needed.
-      await resolveOOBI(holderClient, schemaOOBI, "schemaContact");
-      await resolveOOBI(holderClient, schemaOOBI2, "schemaContact2");
+      await resolveOOBI(holderClient, eventSchemaOOBI, "eventSchemaOOBI");
+      await resolveOOBI(holderClient, QVISchemaOOBI, "QVISchemaOOBI");
+      await resolveOOBI(holderClient, LESchemaOOBI, "LESchemaOOBI");
       if (!isIssuerResolved) {
         const issuerOOBI = await getItem("issuer-oobi");
         if (issuerOOBI) {
