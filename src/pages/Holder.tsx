@@ -22,6 +22,7 @@ import {
   CheckCircle,
   RefreshCw,
   Clock,
+  RotateCcw,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { randomPasscode, Serder } from "signify-ts";
@@ -61,6 +62,7 @@ const Holder = () => {
   const { toast } = useToast();
   const [isConnected, setIsConnected] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isInitializing, setIsInitializing] = useState(true);
   const [isCheckingIncoming, setIsCheckingIncoming] = useState(false);
   const [isIssuerResolved, setIsIssuerResolved] = useState(false);
   const [schemaOOBI, setSchemaOOBI] = useState(
@@ -79,20 +81,19 @@ const Holder = () => {
   const [incomingCredentials, setIncomingCredentials] = useState([]);
 
   useEffect(() => {
-    const loadData = async () => {
-      const saved = await getItem<any>("holder-data");
-      if (saved) {
-        setHolderData(saved);
+    const attemptReconnect = async () => {
+      const savedData = await getItem<any>("holder-data");
+      if (savedData) {
+        setHolderData(savedData);
+        if (savedData.holderBran) {
+          console.log("Attempting to reconnect with saved passcode...");
+          await handleConnect(savedData.holderBran, true);
+        }
       }
+      setIsInitializing(false);
     };
-    loadData();
+    attemptReconnect();
   }, []);
-
-  useEffect(() => {
-    if (holderData) {
-      setItem("holder-data", holderData);
-    }
-  }, [holderData]);
 
   // Auto-check for incoming credentials when connected
   useEffect(() => {
@@ -139,9 +140,13 @@ const Holder = () => {
     selectedCredential: "",
   });
 
-  const handleConnect = async (userPasscode: string) => {
+  const handleConnect = async (userPasscode: string, isReconnect = false) => {
     setIsProcessing(true);
-    console.log("Connecting Holder...");
+    if (isReconnect) {
+      console.log("Reconnecting Issuer...");
+    } else {
+      console.log("Connecting Issuer...");
+    }
     try {
       const holderBran = userPasscode;
       const holderAidAlias = holderData.alias || "holderAid";
@@ -196,12 +201,23 @@ const Holder = () => {
       }));
 
       setIsConnected(true);
-      toast({
-        title: "Connected to KERI Network",
-        description: "Holder client initialized and connected.",
-      });
+      if (isReconnect) {
+        toast({
+          title: "Reconnected",
+          description: "Automatically reconnected to KERI network.",
+        });
+      } else {
+        toast({
+          title: "Connected to KERI Network",
+          description: "Issuer client initialized and connected.",
+        });
+      }
     } catch (error) {
       console.error("Error connecting holder client:", error);
+      if (isReconnect) {
+        // On reconnect failure, clear the bad passcode so the user has to enter it again
+        setHolderData((prev) => ({ ...prev, holderBran: "" }));
+      }
       toast({
         title: "Connection Error",
         description: "Failed to connect to KERI network or create identity.",
@@ -389,7 +405,19 @@ const Holder = () => {
       </div>
 
       <div className="container mx-auto px-6 py-8">
-        {!isConnected ? (
+        {isInitializing ? (
+          <Card className="max-w-2xl mx-auto text-center p-8">
+            <CardHeader>
+              <CardTitle>Initializing Client...</CardTitle>
+              <CardDescription>
+                Please wait while we connect to the network.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <RotateCcw className="h-8 w-8 mx-auto animate-spin text-slate-500" />
+            </CardContent>
+          </Card>
+        ) : !isConnected ? (
           <Card className="max-w-2xl mx-auto">
             <CardHeader className="text-center">
               <CardTitle>Initialize Holder Client</CardTitle>

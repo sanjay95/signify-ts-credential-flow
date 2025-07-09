@@ -60,6 +60,7 @@ const Issuer = () => {
   const { toast } = useToast();
   const [isConnected, setIsConnected] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isInitializing, setIsInitializing] = useState(true);
   const [schemaSaid, setSchemaSaid] = useState(
     "EGUPiCVO73M9worPwR3PfThAtC0AJnH5ZgwsXf6TzbVK"
   );
@@ -92,20 +93,19 @@ const Issuer = () => {
   const [issuerClient, setIssuerClient] = useState(null);
 
   useEffect(() => {
-    const loadData = async () => {
-      const saved = await getItem<any>("issuer-data");
-      if (saved) {
-        setIssuerData(saved);
+    const attemptReconnect = async () => {
+      const savedData = await getItem<any>("issuer-data");
+      if (savedData) {
+        setIssuerData(savedData);
+        if (savedData.issuerBran) {
+          console.log("Attempting to reconnect with saved passcode...");
+          await handleConnect(savedData.issuerBran, true);
+        }
       }
+      setIsInitializing(false);
     };
-    loadData();
+    attemptReconnect();
   }, []);
-
-  useEffect(() => {
-    if (issuerData) {
-      setItem("issuer-data", issuerData);
-    }
-  }, [issuerData]);
 
   const [credentialData, setCredentialData] = useState({
     eventName: "GLEIF Summit",
@@ -113,6 +113,13 @@ const Issuer = () => {
     validDate: "2026-10-01",
   });
   const [holderAid, setHolderAid] = useState("");
+
+  useEffect(() => {
+    if (issuerData.issuerBran) {
+      // Only save if we have a bran
+      setItem("issuer-data", issuerData);
+    }
+  }, [issuerData]);
 
   const [credentials, setCredentials] = useState([
     {
@@ -129,9 +136,14 @@ const Issuer = () => {
     },
   ]);
 
-  const handleConnect = async (userPasscode: string) => {
+  const handleConnect = async (userPasscode: string, isReconnect = false) => {
     setIsProcessing(true);
-    console.log("Connecting Issuer...");
+    if (isReconnect) {
+      console.log("Reconnecting Issuer...");
+    } else {
+      console.log("Connecting Issuer...");
+    }
+
     try {
       const issuerBran = userPasscode;
       const issuerAidAlias = issuerData.alias || "issuerAid";
@@ -213,12 +225,23 @@ const Issuer = () => {
       }));
 
       setIsConnected(true);
-      toast({
-        title: "Connected to KERI Network",
-        description: "Issuer client initialized and connected.",
-      });
+      if (isReconnect) {
+        toast({
+          title: "Reconnected",
+          description: "Automatically reconnected to KERI network.",
+        });
+      } else {
+        toast({
+          title: "Connected to KERI Network",
+          description: "Issuer client initialized and connected.",
+        });
+      }
     } catch (error) {
       console.error("Error connecting issuer client:", error);
+      if (isReconnect) {
+        // On reconnect failure, clear the bad passcode so the user has to enter it again
+        setIssuerData((prev) => ({ ...prev, issuerBran: "" }));
+      }
       toast({
         title: "Connection Error",
         description: "Failed to connect to KERI network or create identity.",
@@ -355,7 +378,19 @@ const Issuer = () => {
       </div>
 
       <div className="container mx-auto px-6 py-8">
-        {!isConnected ? (
+        {isInitializing ? (
+          <Card className="max-w-2xl mx-auto text-center p-8">
+            <CardHeader>
+              <CardTitle>Initializing Client...</CardTitle>
+              <CardDescription>
+                Please wait while we connect to the network.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <RotateCcw className="h-8 w-8 mx-auto animate-spin text-slate-500" />
+            </CardContent>
+          </Card>
+        ) : !isConnected ? (
           <Card className="max-w-2xl mx-auto">
             <CardHeader className="text-center">
               <CardTitle>Initialize Issuer Client</CardTitle>
