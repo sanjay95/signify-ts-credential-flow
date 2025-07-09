@@ -13,6 +13,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Key,
   ArrowLeft,
   Plus,
@@ -22,7 +29,7 @@ import {
 } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
-import { randomPasscode, Serder } from "signify-ts";
+import { randomPasscode, Saider, Serder } from "signify-ts";
 import {
   initializeSignify,
   initializeAndConnectClient,
@@ -54,6 +61,36 @@ import { getItem, setItem } from "@/utils/db";
 import { set } from "date-fns";
 import { PasscodeDialog } from "@/components/PasscodeDialog";
 import { get } from "http";
+const QVI_SCHEMA_SAID = "EBfdlu8R27Fbx-ehrqwImnK-8Cm79sqbAQ4MmvEAYqao";
+const LE_SCHEMA_SAID = "ENPXp1vQzRF6JwIuS-mp2U8Uf1MoADoP_GqQ62VsDZWY";
+const EVENT_SCHEMA_SAID = "EGUPiCVO73M9worPwR3PfThAtC0AJnH5ZgwsXf6TzbVK";
+
+const VC_SCHEMAS = [
+  {
+    label: "Event",
+    value: "event",
+    said: EVENT_SCHEMA_SAID,
+    fields: [
+      { name: "eventName", label: "Event Name", type: "text" },
+      { name: "accessLevel", label: "Access Level", type: "text" },
+      { name: "validDate", label: "Valid Date", type: "date" },
+    ],
+    defaultData: {
+      eventName: "GLEIF Summit",
+      accessLevel: "staff",
+      validDate: "2026-10-01",
+    },
+  },
+  {
+    label: "LE",
+    value: "le",
+    said: LE_SCHEMA_SAID,
+    fields: [{ name: "LEI", label: "LEI", type: "text" }],
+    defaultData: {
+      LEI: "875500ELOZEL05BVXV37",
+    },
+  },
+];
 
 const Issuer = () => {
   const navigate = useNavigate();
@@ -62,12 +99,14 @@ const Issuer = () => {
   const [isConnected, setIsConnected] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
-  const [schemaSaid, setSchemaSaid] = useState(
-    "EGUPiCVO73M9worPwR3PfThAtC0AJnH5ZgwsXf6TzbVK"
-  );
+  // VC type state
+  const [vcType, setVcType] = useState("event");
+  const [schemaSaid, setSchemaSaid] = useState(EVENT_SCHEMA_SAID);
+
   const [schemaOOBI, setSchemaOOBI] = useState(
-    "http://vlei-server:7723/oobi/EGUPiCVO73M9worPwR3PfThAtC0AJnH5ZgwsXf6TzbVK"
+    `http://vlei-server:7723/oobi/${EVENT_SCHEMA_SAID}`
   );
+
   const [isHolderConnected, setIsHolderConnected] = useState(false);
 
   // Get config from navigation state
@@ -137,11 +176,19 @@ const Issuer = () => {
     getCredential();
   }, [isNewCredential, issuerData]);
 
-  const [credentialData, setCredentialData] = useState({
-    eventName: "GLEIF Summit",
-    accessLevel: "staff",
-    validDate: "2026-10-01",
-  });
+  // Dynamic credential data based on VC type
+  const [credentialData, setCredentialData] = useState(
+    VC_SCHEMAS[0].defaultData
+  );
+  // Update schema and form fields when VC type changes
+  useEffect(() => {
+    const selected = VC_SCHEMAS.find((s) => s.value === vcType);
+    if (selected) {
+      setSchemaSaid(selected.said);
+      setSchemaOOBI(`http://vlei-server:7723/oobi/${selected.said}`);
+      setCredentialData(selected.defaultData);
+    }
+  }, [vcType]);
   const [holderAid, setHolderAid] = useState("");
 
   useEffect(() => {
@@ -282,17 +329,58 @@ const Issuer = () => {
       }
       console.log("Issuer Data:", issuerData);
       await resolveOOBI(issuerClient, schemaOOBI, "schemaContact");
+
       const holderOOBI = (await getItem("holder-oobi")) as string;
       await resolveOOBI(issuerClient, holderOOBI, "holderContact");
       console.log("Schema resolved from OOBI:", schemaOOBI);
-      const { credentialSaid: credentialSaid } = await issueCredential(
-        issuerClient,
-        issuerData.alias,
-        issuerData.registrySaid,
-        schemaSaid,
-        holderAid,
-        credentialData
-      );
+      let credentialSaid;
+      if (credentialData.hasOwnProperty("LEI")) {
+        console.log("Issuing as QVI");
+        console.log("finding QVI credentials");
+        let filter: { [x: string]: any } = { "-s": QVI_SCHEMA_SAID };
+        const QviCredential = await issuerClient.credentials().list({ filter });
+        console.log("QVI Credentials:", QviCredential);
+        console.log("sadify edge for GLIEF chain");
+        const leEdge = Saider.saidify({
+          // d: "",
+          qvi: {
+            n: QviCredential.sad.d,
+            s: QviCredential.sad.s,
+          },
+        })[1];
+
+        console.log("sadify rules for GLIEF chain");
+        const leRules = Saider.saidify({
+          // d: "",
+          usageDisclaimer: {
+            l: "Usage of a valid, unexpired, and non-revoked vLEI Credential, as defined in the associated Ecosystem Governance Framework, does not assert that the Legal Entity is trustworthy, honest, reputable in its business dealings, safe to do business with, or compliant with any laws or that an implied or expressly intended purpose will be fulfilled.",
+          },
+          issuanceDisclaimer: {
+            l: "All information in a valid, unexpired, and non-revoked vLEI Credential, as defined in the associated Ecosystem Governance Framework, is accurate as of the date the validation process was complete. The vLEI Credential has been issued to the legal entity or person named in the vLEI Credential as the subject; and the qualified vLEI Issuer exercised reasonable care to perform the validation process set forth in the vLEI Ecosystem Governance Framework.",
+          },
+        })[1];
+        console.log("sadifying done:");
+        console.log("starting issuing QVI credential");
+        credentialSaid = await issueCredential(
+          issuerClient,
+          issuerData.alias,
+          issuerData.registrySaid,
+          LE_SCHEMA_SAID,
+          holderAid,
+          credentialData,
+          leEdge,
+          leRules
+        );
+      } else {
+        credentialSaid = await issueCredential(
+          issuerClient,
+          issuerData.alias,
+          issuerData.registrySaid,
+          schemaSaid,
+          holderAid,
+          credentialData
+        );
+      }
 
       console.log("Credential issued with SAID:", credentialSaid);
       const credential = await issuerClient.credentials().get(credentialSaid);
@@ -496,47 +584,42 @@ const Issuer = () => {
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
+                  {/* VC Type Dropdown */}
+                  <div className="space-y-2">
+                    <Label htmlFor="vcType">VC Type</Label>
+                    <Select value={vcType} onValueChange={setVcType}>
+                      <SelectTrigger id="vcType">
+                        <SelectValue placeholder="Select VC Type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {VC_SCHEMAS.map((schema) => (
+                          <SelectItem key={schema.value} value={schema.value}>
+                            {schema.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="eventName">Event Name</Label>
-                      <Input
-                        id="eventName"
-                        value={credentialData.eventName}
-                        onChange={(e) =>
-                          setCredentialData({
-                            ...credentialData,
-                            eventName: e.target.value,
-                          })
-                        }
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="accessLevel">Access Level</Label>
-                      <Input
-                        id="accessLevel"
-                        value={credentialData.accessLevel}
-                        onChange={(e) =>
-                          setCredentialData({
-                            ...credentialData,
-                            accessLevel: e.target.value,
-                          })
-                        }
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="validDate">Valid Date</Label>
-                      <Input
-                        id="validDate"
-                        type="date"
-                        value={credentialData.validDate}
-                        onChange={(e) =>
-                          setCredentialData({
-                            ...credentialData,
-                            validDate: e.target.value,
-                          })
-                        }
-                      />
-                    </div>
+                    {/* Render dynamic fields for selected VC type */}
+                    {VC_SCHEMAS.find((s) => s.value === vcType)?.fields.map(
+                      (field) => (
+                        <div className="space-y-2" key={field.name}>
+                          <Label htmlFor={field.name}>{field.label}</Label>
+                          <Input
+                            id={field.name}
+                            type={field.type}
+                            value={credentialData[field.name] || ""}
+                            onChange={(e) =>
+                              setCredentialData({
+                                ...credentialData,
+                                [field.name]: e.target.value,
+                              })
+                            }
+                          />
+                        </div>
+                      )
+                    )}
                     <div className="space-y-2">
                       <Label htmlFor="holderAID">Holder AID</Label>
                       <Input

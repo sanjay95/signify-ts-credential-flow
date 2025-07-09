@@ -68,6 +68,9 @@ const Holder = () => {
   const [schemaOOBI, setSchemaOOBI] = useState(
     "http://vlei-server:7723/oobi/EGUPiCVO73M9worPwR3PfThAtC0AJnH5ZgwsXf6TzbVK"
   );
+  const [schemaOOBI2, setSchemaOOBI2] = useState(
+    "http://vlei-server:7723/oobi/EBfdlu8R27Fbx-ehrqwImnK-8Cm79sqbAQ4MmvEAYqao"
+  );
 
   const [holderData, setHolderData] = useState({
     alias: "holderAid",
@@ -248,6 +251,7 @@ const Holder = () => {
       // Ensure necessary OOBIs are resolved before checking notifications.
       // This could be optimized to only run if needed.
       await resolveOOBI(holderClient, schemaOOBI, "schemaContact");
+      await resolveOOBI(holderClient, schemaOOBI2, "schemaContact2");
       if (!isIssuerResolved) {
         const issuerOOBI = await getItem("issuer-oobi");
         if (issuerOOBI) {
