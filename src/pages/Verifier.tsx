@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useConfig } from "@/hooks/useConfig";
 import {
@@ -19,9 +19,30 @@ import {
   Search,
   Shield,
   AlertCircle,
+  RotateCcw,
+  RefreshCw,
+  Clock,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import {
+  initializeAndConnectClient,
+  createNewAID,
+  addEndRoleForAID,
+  generateOOBI,
+  resolveOOBI,
+  createTimestamp,
+  ipexApplyForCredential,
+  waitForAndGetNotification,
+  markNotificationRead,
+  DEFAULT_IDENTIFIER_ARGS,
+  ROLE_AGENT,
+  IPEX_OFFER_ROUTE,
+  IPEX_GRANT_ROUTE,
+  ipexAdmitGrant,
+} from "../utils/utils";
+import { getItem, setItem } from "@/utils/db";
 import { PasscodeDialog } from "@/components/PasscodeDialog";
+import { set } from "date-fns";
 
 const Verifier = () => {
   const navigate = useNavigate();
@@ -29,69 +50,285 @@ const Verifier = () => {
   const { toast } = useToast();
   const [isConnected, setIsConnected] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isInitializing, setIsInitializing] = useState(true);
+  const [isCheckingIncoming, setIsCheckingIncoming] = useState(false);
+  const [verifierClient, setVerifierClient] = useState(null);
 
   const [verifierData, setVerifierData] = useState({
     alias: "verifierAid",
+    verifierAid: "",
+    verifierOOBI: "",
+    verifierBran: "",
   });
 
   const [requestData, setRequestData] = useState({
     holderAID: "",
     schemaSAID: "EGUPiCVO73M9worPwR3PfThAtC0AJnH5ZgwsXf6TzbVK",
-    attributes: "eventName: GLEIF Summit",
+    attributes: { eventName: "GLEIF Summit" },
   });
 
-  const [verifications, setVerifications] = useState([
-    {
-      id: "ver-001",
-      credentialSaid: "EGUPiCVO73M9worPwR3PfThAtC0AJnH5ZgwsXf6TzbVK",
-      status: "verified",
-      holder: "holder123",
-      verifiedDate: "2024-01-15",
-      result: "valid",
-      claims: {
-        eventName: "GLEIF Summit",
-        accessLevel: "staff",
-        validDate: "2026-10-01",
-      },
-    },
-  ]);
+  const [verifications, setVerifications] = useState([]);
 
-  const handleConnect = async (userPasscode: string) => {
+  useEffect(() => {
+    const attemptReconnect = async () => {
+      const savedData = await getItem<any>("verifier-data");
+      if (savedData) {
+        setVerifierData(savedData);
+        if (savedData.verifierBran) {
+          console.log("Attempting to reconnect with saved passcode...");
+          await handleConnect(savedData.verifierBran, true);
+        }
+      }
+      setIsInitializing(false);
+    };
+    attemptReconnect();
+  }, []);
+
+  // Auto-check for incoming presentations when connected
+  useEffect(() => {
+    if (isConnected && verifierClient) {
+      checkIncomingPresentations();
+      // Set up periodic checking every 30 seconds
+      const interval = setInterval(() => {
+        checkIncomingPresentations();
+      }, 30000);
+      return () => clearInterval(interval);
+    }
+  }, [isConnected, verifierClient]);
+
+  useEffect(() => {
+    if (verifierData.verifierBran) {
+      setItem("verifier-data", verifierData);
+    }
+  }, [verifierData]);
+
+  const handleConnect = async (userPasscode: string, isReconnect = false) => {
     setIsProcessing(true);
-    setTimeout(() => {
+    if (isReconnect) {
+      console.log("Reconnecting Verifier...");
+    } else {
+      console.log("Connecting Verifier...");
+    }
+
+    try {
+      const verifierBran = userPasscode;
+      const verifierAidAlias = verifierData.alias || "verifierAid";
+      const { client: verifierClient, clientState: verifierClientState } =
+        await initializeAndConnectClient(
+          verifierBran,
+          config.adminUrl,
+          config.bootUrl
+        );
+      setVerifierClient(verifierClient);
+      console.log("Verifier client connected:", verifierClientState);
+
+      let verifierAid, verifierOOBI;
+
+      try {
+        verifierAid = await verifierClient.identifiers().get(verifierAidAlias);
+        console.log("Existing Verifier AID found:", verifierAid);
+
+        verifierOOBI = await generateOOBI(
+          verifierClient,
+          verifierAidAlias,
+          ROLE_AGENT
+        );
+      } catch (error) {
+        console.log("No existing Verifier AID found, creating new one...");
+        const { aid: newVerifierAid } = await createNewAID(
+          verifierClient,
+          verifierAidAlias,
+          DEFAULT_IDENTIFIER_ARGS
+        );
+        verifierAid = newVerifierAid;
+        console.log("Verifier AID created:", verifierAid);
+
+        await addEndRoleForAID(verifierClient, verifierAidAlias, ROLE_AGENT);
+        verifierOOBI = await generateOOBI(
+          verifierClient,
+          verifierAidAlias,
+          ROLE_AGENT
+        );
+        console.log("Verifier OOBI generated:", verifierOOBI);
+      }
+      setItem("verifier-oobi", verifierOOBI);
+      setVerifierData((prevData) => ({
+        ...prevData,
+        verifierBran: verifierBran,
+        verifierAid: verifierAid.prefix || verifierAid.d,
+        verifierOOBI: verifierOOBI,
+      }));
+
       setIsConnected(true);
-      setIsProcessing(false);
+      if (isReconnect) {
+        toast({
+          title: "Reconnected",
+          description: "Automatically reconnected to KERI network.",
+        });
+      } else {
+        toast({
+          title: "Connected to KERI Network",
+          description: "Verifier client initialized and connected.",
+        });
+      }
+    } catch (error) {
+      console.error("Error connecting verifier client:", error);
+      if (isReconnect) {
+        setVerifierData((prev) => ({ ...prev, verifierBran: "" }));
+      }
       toast({
-        title: "Connected Successfully",
-        description: "Verifier client initialized and connected to KERI network",
+        title: "Connection Error",
+        description: "Failed to connect to KERI network or create identity.",
+        variant: "destructive",
       });
-    }, 2000);
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   const handleRequestCredential = async () => {
     setIsProcessing(true);
-    setTimeout(() => {
+    try {
+      const holderOOBI = (await getItem("holder-oobi")) as string;
+      if (!holderOOBI) {
+        throw new Error(
+          "Holder OOBI not found. Please ensure the Holder has been created and connected first."
+        );
+      }
+      await resolveOOBI(verifierClient, holderOOBI, "holderContact");
+
+      const { applySaid } = await ipexApplyForCredential(
+        verifierClient,
+        verifierData.alias,
+        requestData.holderAID,
+        requestData.schemaSAID,
+        requestData.attributes,
+        createTimestamp()
+      );
+
       const newVerification = {
-        id: `ver-${Date.now()}`,
-        credentialSaid: `E${Math.random().toString(36).substring(2, 15).toUpperCase()}`,
+        id: applySaid,
+        applySaid: applySaid,
         status: "pending",
         holder: requestData.holderAID,
-        verifiedDate: new Date().toISOString().split("T")[0],
+        requestDate: new Date().toISOString(),
         result: "pending",
-        claims: {
-          eventName: "GLEIF Summit",
-          accessLevel: "staff",
-          validDate: "2026-10-01",
-        },
+        claims: null,
       };
 
-      setVerifications([...verifications, newVerification]);
-      setIsProcessing(false);
+      setVerifications((prev) => [...prev, newVerification]);
       toast({
         title: "Verification Request Sent",
-        description: "IPEX Apply message sent to holder for credential presentation",
+        description:
+          "IPEX Apply message sent to holder for credential presentation.",
       });
-    }, 3000);
+    } catch (error) {
+      console.error("Error requesting credential:", error);
+      toast({
+        title: "Request Error",
+        description: error.message || "Failed to send verification request.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const checkIncomingPresentations = async () => {
+    if (!verifierClient) return;
+    setIsCheckingIncoming(true);
+    try {
+      console.log("Verifier checking for incoming presentations (offers)...");
+      const grantNotifications = await waitForAndGetNotification(
+        verifierClient,
+        IPEX_GRANT_ROUTE
+      );
+
+      if (grantNotifications.length === 0) {
+        console.log("No new grant notifications found.");
+        return;
+      }
+
+      console.log(
+        `Found ${grantNotifications.length} incoming grant notification(s).`
+      );
+
+      for (const notification of grantNotifications) {
+        // Retrieve the full IPEX grant exchange details.
+
+        const grantExchange = await verifierClient
+          .exchanges()
+          .get(notification.a.d);
+
+        const embeddedACDC = grantExchange.exn.e.acdc;
+        console.log(embeddedACDC, "Embedded ACDC in grant exchange");
+        setVerifications((prev) => [
+          ...prev,
+          {
+            id: notification.i,
+            applySaid: grantExchange.exn.a.p, // SAID of the original apply message
+            status: "received",
+            result: "valid", // Assuming we accept it for demo purposes
+            verifiedDate: new Date().toISOString(),
+            claims: embeddedACDC.a,
+            credentialSaid: embeddedACDC.d,
+          },
+        ]);
+
+        console.log(
+          "Updated verifications with received credential claims:",
+          verifications
+        );
+        // Verifier - Admit Grant
+        const admitResponse = await ipexAdmitGrant(
+          verifierClient,
+          verifierData.alias,
+          embeddedACDC?.a.i || "EFKxZRM-Nxf23dh2di1aDAoDb-N5VB8HwnEtn-LypW_2",
+          notification.a.d
+        );
+        console.log("Verifier admitting credential");
+
+        // Verifier - Mark notification
+        await markNotificationRead(verifierClient, notification.i);
+        console.log("\n✅ Verifier marked notification read");
+
+        const applySaid = grantExchange.exn.a.p; // SAID of the original apply message
+        const offeredAcdc = grantExchange.payload.acdc;
+
+        // // TODO: Full verification logic (check signatures, registry status, etc.)
+        // // For this demo, we'll just accept it and mark as verified.
+        // const isVerified = true; // Placeholder for actual verification result
+
+        // setVerifications((prev) =>
+        //   prev.map((v) =>
+        //     v.applySaid === applySaid
+        //       ? {
+        //           ...v,
+        //           status: "received",
+        //           result: isVerified ? "valid" : "invalid",
+        //           verifiedDate: new Date().toISOString(),
+        //           claims: offeredAcdc.a,
+        //           credentialSaid: offeredAcdc.d,
+        //         }
+        //       : v
+        //   )
+        // );
+        // console.log("verifierData", verifierData);
+
+        // await markNotificationRead(verifierClient, notification.i);
+        toast({
+          title: "Presentation Received",
+          description: `Credential received from ${offeredAcdc.i.substring(
+            0,
+            20
+          )}...`,
+        });
+      }
+    } catch (error) {
+      console.log("No incoming presentations found or error:", error.message);
+    } finally {
+      setIsCheckingIncoming(false);
+    }
   };
 
   return (
@@ -178,7 +415,7 @@ const Verifier = () => {
                   placeholder="Enter verifier alias"
                 />
               </div>
-              <PasscodeDialog 
+              <PasscodeDialog
                 onPasscodeSubmit={handleConnect}
                 isProcessing={isProcessing}
                 entityType="Verifier"
@@ -201,7 +438,8 @@ const Verifier = () => {
                     Request Credential Presentation
                   </CardTitle>
                   <CardDescription>
-                    Send an IPEX Apply request to a holder for credential presentation
+                    Send an IPEX Apply request to a holder for credential
+                    presentation
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -253,9 +491,7 @@ const Verifier = () => {
                     className="w-full"
                   >
                     <Search className="h-4 w-4 mr-2" />
-                    {isProcessing
-                      ? "Sending Request..."
-                      : "Request Credential"}
+                    {isProcessing ? "Sending Request..." : "Request Credential"}
                   </Button>
                 </CardContent>
               </Card>
@@ -264,10 +500,31 @@ const Verifier = () => {
             <TabsContent value="verify" className="space-y-6">
               <Card>
                 <CardHeader>
-                  <CardTitle>Credential Verifications</CardTitle>
-                  <CardDescription>
-                    View and manage all credential verification requests
-                  </CardDescription>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="flex items-center gap-2">
+                        <Clock className="h-5 w-5" />
+                        Credential Verifications
+                      </CardTitle>
+                      <CardDescription>
+                        View and manage all credential verification requests
+                      </CardDescription>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={checkIncomingPresentations}
+                      disabled={isCheckingIncoming}
+                      className="flex items-center gap-2"
+                    >
+                      <RefreshCw
+                        className={`h-4 w-4 ${
+                          isCheckingIncoming ? "animate-spin" : ""
+                        }`}
+                      />
+                      {isCheckingIncoming ? "Checking..." : "Check Now"}
+                    </Button>
+                  </div>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">

@@ -1,5 +1,12 @@
-holder Bde57qp2kit7c8wPIZp74
-issuer A02ZuIDSyjL-x7BZptYL7
+holder CebUBCKCxAzYE73NccyQe
 
-"http://keria:3902/oobi/EJh2FflquaFlojQ1ID4SPm0nc8Hq8zj-7SYDNcrAk6TU/agent/
-EAxcvh2zrY8g0l87Kjys_21BjBHNB2JRSU1VAFJnnhSY"
+issuer DCcJodlzmlE6mCHnk6Jrv
+
+verifier AMSLXwvQ8OEsc9XVNNKlC
+
+  -H 'signature: indexed="?0";
+signify="0BCKupIN5cS9ObXSkcYGUKQ60o2rX1-OlZ1ne2oQerX71FUkwf_pmZQfchSjCmiA841hw6JwqUs_36FPMWczs6sO"' \
+
+
+  
+  

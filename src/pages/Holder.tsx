@@ -95,6 +95,13 @@ const Holder = () => {
     attemptReconnect();
   }, []);
 
+  useEffect(() => {
+    if (holderData.holderBran) {
+      // Only save if we have a bran
+      setItem("holder-data", holderData);
+    }
+  }, [holderData]);
+
   // Auto-check for incoming credentials when connected
   useEffect(() => {
     if (isConnected && holderClient) {
@@ -235,6 +242,7 @@ const Holder = () => {
     try {
       // Ensure necessary OOBIs are resolved before checking notifications.
       // This could be optimized to only run if needed.
+      await resolveOOBI(holderClient, schemaOOBI, "schemaContact");
       if (!isIssuerResolved) {
         const issuerOOBI = await getItem("issuer-oobi");
         if (issuerOOBI) {

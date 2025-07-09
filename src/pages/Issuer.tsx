@@ -53,6 +53,7 @@ import {
 import { getItem, setItem } from "@/utils/db";
 import { set } from "date-fns";
 import { PasscodeDialog } from "@/components/PasscodeDialog";
+import { get } from "http";
 
 const Issuer = () => {
   const navigate = useNavigate();
@@ -107,6 +108,35 @@ const Issuer = () => {
     attemptReconnect();
   }, []);
 
+  const [credentials, setCredentials] = useState([]);
+  const [isNewCredential, setNewCredential] = useState(false);
+
+  useEffect(() => {
+    const getCredential = async () => {
+      const credentials = await issuerClient?.credentials()?.list();
+      console.log("------ ---- Fetched credential:", credentials);
+      setCredentials([]);
+      credentials.map((credential) => {
+        setCredentials((prev) => [
+          ...prev,
+          {
+            id: credential.sad.d,
+            said: credential.sad.d,
+            status: "issued",
+            holder: holderAid,
+            issuedDate: credential.sad.a.dt,
+            claims: {
+              eventName: credential.sad.a.eventName,
+              accessLevel: credential.sad.a.accessLevel,
+              validDate: credential.sad.a.validDate,
+            },
+          },
+        ]);
+      });
+    };
+    getCredential();
+  }, [isNewCredential, issuerData]);
+
   const [credentialData, setCredentialData] = useState({
     eventName: "GLEIF Summit",
     accessLevel: "staff",
@@ -120,21 +150,6 @@ const Issuer = () => {
       setItem("issuer-data", issuerData);
     }
   }, [issuerData]);
-
-  const [credentials, setCredentials] = useState([
-    {
-      id: "cred-001",
-      said: "EGUPiCVO73M9worPwR3PfThAtC0AJnH5ZgwsXf6TzbVK",
-      status: "issued",
-      holder: "holder123",
-      issuedDate: "2024-01-15",
-      claims: {
-        eventName: "GLEIF Summit",
-        accessLevel: "staff",
-        validDate: "2026-10-01",
-      },
-    },
-  ]);
 
   const handleConnect = async (userPasscode: string, isReconnect = false) => {
     setIsProcessing(true);
@@ -281,6 +296,7 @@ const Issuer = () => {
 
       console.log("Credential issued with SAID:", credentialSaid);
       const credential = await issuerClient.credentials().get(credentialSaid);
+      setNewCredential(true);
 
       console.log("Credential details:", credential);
       console.log("granting credential to holder");
@@ -313,19 +329,34 @@ const Issuer = () => {
 
   const handleRevokeCredential = async (credentialId: string) => {
     setIsProcessing(true);
-    setTimeout(() => {
-      setCredentials(
-        credentials.map((cred) =>
-          cred.id === credentialId ? { ...cred, status: "revoked" } : cred
-        )
-      );
-      setIsProcessing(false);
-      toast({
-        title: "Credential Revoked",
-        description:
-          "Credential status updated in TEL and propagated to network",
-      });
-    }, 2000);
+    const revokeResult = await issuerClient
+      .credentials()
+      .revoke(issuerData.alias, credentialId);
+
+    const revokeOperation = revokeResult.op; // Get the operation from the result
+
+    // Wait for the revocation operation to complete.
+    const revokeResponse = await issuerClient
+      .operations()
+      .wait(revokeOperation, AbortSignal.timeout(DEFAULT_TIMEOUT_MS)); // Used revokeOperation directly
+
+    // Log the credential status after revocation.
+    // Note the 'et: "rev"' indicating it's now revoked, and the sequence number 's' has incremented.
+    const statusAfter = (await issuerClient.credentials().get(credentialId))
+      .status;
+    console.log("✅ Credential status after revocation:", statusAfter);
+
+    setCredentials(
+      credentials.map((cred) =>
+        cred.id === credentialId ? { ...cred, status: "revoked" } : cred
+      )
+    );
+
+    setIsProcessing(false);
+    toast({
+      title: "Credential Revoked",
+      description: "Credential status updated in TEL and propagated to network",
+    });
   };
 
   return (
