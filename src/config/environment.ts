@@ -1,4 +1,3 @@
-
 // Environment configuration
 export const ENV_CONFIG = {
   local: {
@@ -20,7 +19,7 @@ export const ENV_CONFIG = {
 
 // Fixed passcodes for specific account types
 export const FIXED_PASSCODES = {
-  GLEIF: "0123456789abcdefghijk", // GLEIF root passcode
+  GLEIF: "Dm8Tmz05CF6_JLX9sVlFe", // GLEIF root passcode
 };
 
 // Placeholder LEI values for testing

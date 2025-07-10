@@ -57,12 +57,17 @@ import {
   IPEX_APPLY_ROUTE,
   IPEX_OFFER_ROUTE,
   SCHEMA_SERVER_HOST,
-  ipexApplyCredential,
+  // ipexApplyCredential,
   ipexOfferCredential,
 } from "../utils/utils";
 import { getItem, setItem } from "@/utils/db";
 import { PasscodeDialog } from "@/components/PasscodeDialog";
-import { AccountType, AccountConfig, getAvailableSchemas, PRECONFIGURED_OOBIS } from "@/types/accounts";
+import {
+  AccountType,
+  AccountConfig,
+  getAvailableSchemas,
+  PRECONFIGURED_OOBIS,
+} from "@/types/accounts";
 import { FIXED_PASSCODES } from "@/config/environment";
 
 const Holder = () => {
@@ -75,7 +80,7 @@ const Holder = () => {
   const [holderClient, setHolderClient] = useState(null);
 
   // Get account type from navigation state
-  const accountType = location.state?.accountType as AccountType || 'LE';
+  const accountType = (location.state?.accountType as AccountType) || "LE";
   const [config, setConfig] = useState({
     adminUrl: "https://keria.testnet.gleif.org:3901",
     bootUrl: "https://keria.testnet.gleif.org:3903",
@@ -99,19 +104,24 @@ const Holder = () => {
 
   const [credentials, setCredentials] = useState([]);
   const [notifications, setNotifications] = useState([]);
-  
+
   // Target selection for credential requests
   const [targetOOBI, setTargetOOBI] = useState("");
-  const [selectedPreconfiguredOOBI, setSelectedPreconfiguredOOBI] = useState("");
+  const [selectedPreconfiguredOOBI, setSelectedPreconfiguredOOBI] =
+    useState("");
   const [customOOBI, setCustomOOBI] = useState("");
 
   // Available schemas for this account type
   const availableSchemas = getAvailableSchemas(accountType);
-  const [selectedSchema, setSelectedSchema] = useState(availableSchemas[0]?.said || "");
+  const [selectedSchema, setSelectedSchema] = useState(
+    availableSchemas[0]?.said || ""
+  );
 
   useEffect(() => {
     const attemptReconnect = async () => {
-      const savedData = await getItem<AccountConfig>(`${accountType.toLowerCase()}-data`);
+      const savedData = await getItem<AccountConfig>(
+        `${accountType.toLowerCase()}-data`
+      );
       if (savedData && savedData.type === accountType) {
         setAccountData(savedData);
         if (savedData.passcode) {
@@ -144,7 +154,7 @@ const Holder = () => {
     } else {
       console.log(`Connecting ${accountType} Holder...`);
     }
-    
+
     try {
       const { client: holderClient, clientState: holderClientState } =
         await initializeAndConnectClient(
@@ -163,7 +173,9 @@ const Holder = () => {
 
         oobi = await generateOOBI(holderClient, accountData.alias, ROLE_AGENT);
       } catch (error) {
-        console.log(`No existing ${accountType} holder AID found, creating new one...`);
+        console.log(
+          `No existing ${accountType} holder AID found, creating new one...`
+        );
         const { aid: newAid } = await createNewAID(
           holderClient,
           accountData.alias,
@@ -181,16 +193,16 @@ const Holder = () => {
 
       // Store OOBI in IndexedDB for easy access
       setItem(`${accountType.toLowerCase()}-holder-oobi`, oobi);
-      
+
       const updatedAccountData = {
         ...accountData,
         passcode: userPasscode,
         aid: aid.prefix || aid.d,
         oobi: oobi,
       };
-      
+
       setAccountData(updatedAccountData);
-      
+
       // Persist to IndexedDB immediately
       await setItem(`${accountType.toLowerCase()}-data`, updatedAccountData);
 
@@ -224,7 +236,7 @@ const Holder = () => {
   const handleRequestCredential = async () => {
     setIsProcessing(true);
     console.log("Requesting credential from issuer");
-    
+
     try {
       if (!targetOOBI) {
         toast({
@@ -244,12 +256,12 @@ const Holder = () => {
 
       console.log("Schema resolved from OOBI:", schemaOOBI);
 
-      const applyResponse = await ipexApplyCredential(
-        holderClient,
-        accountData.alias,
-        targetOOBI.split('/').pop() || "", // Extract AID from OOBI
-        selectedSchema
-      );
+      // const applyResponse = await ipexApplyCredential(
+      //   holderClient,
+      //   accountData.alias,
+      //   targetOOBI.split('/').pop() || "", // Extract AID from OOBI
+      //   selectedSchema
+      // );
 
       console.log(`${accountType} holder applied for credential.`);
 
@@ -279,7 +291,9 @@ const Holder = () => {
 
   // Check if this account type has a fixed passcode
   const hasFixedPasscode = accountType in FIXED_PASSCODES;
-  const fixedPasscode = hasFixedPasscode ? FIXED_PASSCODES[accountType as keyof typeof FIXED_PASSCODES] : undefined;
+  const fixedPasscode = hasFixedPasscode
+    ? FIXED_PASSCODES[accountType as keyof typeof FIXED_PASSCODES]
+    : undefined;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-50 to-slate-50">
@@ -348,10 +362,12 @@ const Holder = () => {
             <CardHeader className="text-center">
               <CardTitle>Initialize {accountType} Holder Client</CardTitle>
               <CardDescription>
-                Connect to the KERI network and set up your {accountType} holder identity
+                Connect to the KERI network and set up your {accountType} holder
+                identity
                 {hasFixedPasscode && (
                   <div className="mt-2 p-2 bg-blue-50 rounded text-sm">
-                    <strong>Note:</strong> This account type uses a predefined passcode
+                    <strong>Note:</strong> This account type uses a predefined
+                    passcode
                   </div>
                 )}
               </CardDescription>
@@ -382,7 +398,7 @@ const Holder = () => {
                   placeholder={`Enter ${accountType} holder alias`}
                 />
               </div>
-              
+
               {hasFixedPasscode ? (
                 <div className="space-y-4">
                   <div className="p-3 bg-green-50 border border-green-200 rounded-md">
@@ -395,7 +411,9 @@ const Holder = () => {
                     disabled={isProcessing}
                     className="w-full"
                   >
-                    {isProcessing ? "Connecting..." : `Connect as ${accountType}`}
+                    {isProcessing
+                      ? "Connecting..."
+                      : `Connect as ${accountType}`}
                   </Button>
                 </div>
               ) : (
@@ -429,8 +447,13 @@ const Holder = () => {
                 <CardContent className="space-y-4">
                   {/* Schema Selection */}
                   <div className="space-y-2">
-                    <Label htmlFor="schema">Available Schemas for {accountType}</Label>
-                    <Select value={selectedSchema} onValueChange={setSelectedSchema}>
+                    <Label htmlFor="schema">
+                      Available Schemas for {accountType}
+                    </Label>
+                    <Select
+                      value={selectedSchema}
+                      onValueChange={setSelectedSchema}
+                    >
                       <SelectTrigger id="schema">
                         <SelectValue placeholder="Select schema to request" />
                       </SelectTrigger>
@@ -439,7 +462,9 @@ const Holder = () => {
                           <SelectItem key={schema.said} value={schema.said}>
                             <div>
                               <div className="font-medium">{schema.name}</div>
-                              <div className="text-xs text-slate-500">{schema.description}</div>
+                              <div className="text-xs text-slate-500">
+                                {schema.description}
+                              </div>
                             </div>
                           </SelectItem>
                         ))}
@@ -450,23 +475,30 @@ const Holder = () => {
                   {/* Target Selection */}
                   <div className="space-y-4">
                     <Label>Issuer OOBI</Label>
-                    
+
                     {/* Preconfigured OOBIs */}
                     {PRECONFIGURED_OOBIS[accountType].length > 0 && (
                       <div className="space-y-2">
-                        <Label htmlFor="preconfiguredOOBI">Preconfigured Issuers</Label>
-                        <Select value={selectedPreconfiguredOOBI} onValueChange={setSelectedPreconfiguredOOBI}>
+                        <Label htmlFor="preconfiguredOOBI">
+                          Preconfigured Issuers
+                        </Label>
+                        <Select
+                          value={selectedPreconfiguredOOBI}
+                          onValueChange={setSelectedPreconfiguredOOBI}
+                        >
                           <SelectTrigger id="preconfiguredOOBI">
                             <SelectValue placeholder="Select preconfigured issuer" />
                           </SelectTrigger>
                           <SelectContent>
-                            {PRECONFIGURED_OOBIS[accountType].map((oobi, index) => (
-                              <SelectItem key={index} value={oobi}>
-                                <div className="font-mono text-xs">
-                                  {oobi.substring(0, 60)}...
-                                </div>
-                              </SelectItem>
-                            ))}
+                            {PRECONFIGURED_OOBIS[accountType].map(
+                              (oobi, index) => (
+                                <SelectItem key={index} value={oobi}>
+                                  <div className="font-mono text-xs">
+                                    {oobi.substring(0, 60)}...
+                                  </div>
+                                </SelectItem>
+                              )
+                            )}
                           </SelectContent>
                         </Select>
                       </div>
@@ -474,7 +506,9 @@ const Holder = () => {
 
                     {/* Custom OOBI */}
                     <div className="space-y-2">
-                      <Label htmlFor="customOOBI">Or Enter Custom Issuer OOBI</Label>
+                      <Label htmlFor="customOOBI">
+                        Or Enter Custom Issuer OOBI
+                      </Label>
                       <Input
                         id="customOOBI"
                         value={customOOBI}
@@ -500,7 +534,9 @@ const Holder = () => {
                     className="w-full"
                   >
                     <Send className="h-4 w-4 mr-2" />
-                    {isProcessing ? "Requesting Credential..." : "Request Credential"}
+                    {isProcessing
+                      ? "Requesting Credential..."
+                      : "Request Credential"}
                   </Button>
                 </CardContent>
               </Card>
@@ -558,7 +594,8 @@ const Holder = () => {
                 <CardHeader>
                   <CardTitle>{accountType} Holder Configuration</CardTitle>
                   <CardDescription>
-                    Manage your {accountType} holder settings and network configuration
+                    Manage your {accountType} holder settings and network
+                    configuration
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -580,7 +617,7 @@ const Holder = () => {
                     <Label>AID Alias</Label>
                     <Input value={accountData.alias} readOnly />
                   </div>
-                  
+
                   {/* OOBI Display */}
                   {accountData.oobi && (
                     <div className="space-y-2">
@@ -599,7 +636,7 @@ const Holder = () => {
                       </div>
                     </div>
                   )}
-                  
+
                   <div className="flex items-center gap-2 p-4 bg-green-50 rounded-lg">
                     <CheckCircle className="h-5 w-5 text-green-600" />
                     <span className="text-green-700">
