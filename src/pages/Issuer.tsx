@@ -103,17 +103,17 @@ const Issuer = () => {
   const [vcType, setVcType] = useState("event");
   const [schemaSaid, setSchemaSaid] = useState(EVENT_SCHEMA_SAID);
 
-  const [schemaOOBI, setSchemaOOBI] = useState(
-    `http://vlei-server:7723/oobi/${EVENT_SCHEMA_SAID}`
-  );
-
   const [isHolderConnected, setIsHolderConnected] = useState(false);
 
   // Get config from navigation state
   const [config, setConfig] = useState({
-    adminUrl: "http://localhost:3901",
-    bootUrl: "http://localhost:3903",
+    adminUrl: "https://keria.testnet.gleif.org:3901",
+    bootUrl: "https://keria.testnet.gleif.org:3903",
+    schemaServer: "https://schema.testnet.gleif.org:7723",
   });
+  const [schemaOOBI, setSchemaOOBI] = useState(
+    `${config.schemaServer}/oobi/${EVENT_SCHEMA_SAID}`
+  );
 
   useEffect(() => {
     if (location.state?.config) {
@@ -155,7 +155,7 @@ const Issuer = () => {
       const credentials = await issuerClient?.credentials()?.list();
       console.log("------ ---- Fetched credential:", credentials);
       setCredentials([]);
-      credentials.map((credential) => {
+      credentials?.map((credential) => {
         setCredentials((prev) => [
           ...prev,
           {
@@ -185,7 +185,9 @@ const Issuer = () => {
     const selected = VC_SCHEMAS.find((s) => s.value === vcType);
     if (selected) {
       setSchemaSaid(selected.said);
-      setSchemaOOBI(`http://vlei-server:7723/oobi/${selected.said}`);
+      setSchemaOOBI(
+        `https://schema.testnet.gleif.org:7723/oobi/${selected.said}`
+      );
       setCredentialData(selected.defaultData);
     }
   }, [vcType]);

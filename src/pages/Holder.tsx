@@ -66,14 +66,16 @@ const Holder = () => {
   const [isCheckingIncoming, setIsCheckingIncoming] = useState(false);
   const [isIssuerResolved, setIsIssuerResolved] = useState(false);
   const [eventSchemaOOBI, setSchemaOOBI] = useState(
-    "http://vlei-server:7723/oobi/EGUPiCVO73M9worPwR3PfThAtC0AJnH5ZgwsXf6TzbVK"
+    "https://schema.testnet.gleif.org:7723/oobi/EGUPiCVO73M9worPwR3PfThAtC0AJnH5ZgwsXf6TzbVK"
   );
   const [QVISchemaOOBI, setSchemaOOBI2] = useState(
-    "http://vlei-server:7723/oobi/EBfdlu8R27Fbx-ehrqwImnK-8Cm79sqbAQ4MmvEAYqao"
+    "https://schema.testnet.gleif.org:7723/oobi/EBfdlu8R27Fbx-ehrqwImnK-8Cm79sqbAQ4MmvEAYqao"
   );
   const [LESchemaOOBI, setSchemaOOBI3] = useState(
-    "http://vlei-server:7723/oobi/ENPXp1vQzRF6JwIuS-mp2U8Uf1MoADoP_GqQ62VsDZWY"
+    "https://schema.testnet.gleif.org:7723/oobi/ENPXp1vQzRF6JwIuS-mp2U8Uf1MoADoP_GqQ62VsDZWY"
   );
+  const testnetGLEIFIssuerOOBI =
+    "https://keria.testnet.gleif.org:3902/oobi/EBY_mvBW59KHb6jH3X4xFxrmNai9ggLtZdkMN7RITtNr/agent/EL-_lAKgnalspJPUKflsNSr_Y3b63tzZ0PK2hxKTepIg";
 
   const [holderData, setHolderData] = useState({
     alias: "holderAid",
@@ -253,9 +255,10 @@ const Holder = () => {
     try {
       // Ensure necessary OOBIs are resolved before checking notifications.
       // This could be optimized to only run if needed.
-      await resolveOOBI(holderClient, eventSchemaOOBI, "eventSchemaOOBI");
+      // await resolveOOBI(holderClient, eventSchemaOOBI, "eventSchemaOOBI");
       await resolveOOBI(holderClient, QVISchemaOOBI, "QVISchemaOOBI");
       await resolveOOBI(holderClient, LESchemaOOBI, "LESchemaOOBI");
+      await resolveOOBI(holderClient, testnetGLEIFIssuerOOBI, "issuerContact");
       if (!isIssuerResolved) {
         const issuerOOBI = await getItem("issuer-oobi");
         if (issuerOOBI) {

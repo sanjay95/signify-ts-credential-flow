@@ -114,8 +114,8 @@ export async function isServiceHealthy(
 }
 
 // Default KERIA connection parameters (adjust as needed for your environment)
-export const DEFAULT_ADMIN_URL = "http://localhost:3901";
-export const DEFAULT_BOOT_URL = "http://localhost:3903";
+export const DEFAULT_ADMIN_URL = "https://keria.testnet.gleif.org:3901";
+export const DEFAULT_BOOT_URL = "https://keria.testnet.gleif.org:3903";
 export const DEFAULT_TIMEOUT_MS = 30000; // 30 seconds for operations
 export const DEFAULT_DELAY_MS = 5000; // 5 seconds for operations
 export const DEFAULT_RETRIES = 5; // For retries
@@ -124,14 +124,17 @@ export const IPEX_GRANT_ROUTE = "/exn/ipex/grant";
 export const IPEX_ADMIT_ROUTE = "/exn/ipex/admit";
 export const IPEX_APPLY_ROUTE = "/exn/ipex/apply";
 export const IPEX_OFFER_ROUTE = "/exn/ipex/offer";
-export const SCHEMA_SERVER_HOST = "http://vlei-server:7723";
+export const SCHEMA_SERVER_HOST = "https://schema.testnet.gleif.org:7723";
 
 export const DEFAULT_IDENTIFIER_ARGS = {
   toad: 3,
   wits: [
-    "BBilc4-L3tFUnfM_wJr4S4OJanAv_VmF_dJNN6vkf2Ha",
-    "BLskRTInXnMxWaGqcpSyMgo0nYbalW99cGZESrz3zapM",
-    "BIKKuvBwpmDVA4Ds-EpL5bt9OqPzWPja2LigFYZN2YfX",
+    "BDbh2CJbkQlVSCYzVVyVTT9934yAFn2sFe8tOe-pSVUx",
+    "BKifL6vrvwi-im9d6YvCPSJYQ1VPcpYYNBag-eXlx0MM",
+    "BJqHtDoLT_K_XyOgr2ejBOqD9276TYMTg2EEqWKs-V0q",
+    // "BBilc4-L3tFUnfM_wJr4S4OJanAv_VmF_dJNN6vkf2Ha",
+    // "BLskRTInXnMxWaGqcpSyMgo0nYbalW99cGZESrz3zapM",
+    // "BIKKuvBwpmDVA4Ds-EpL5bt9OqPzWPja2LigFYZN2YfX",
   ],
 };
 
