@@ -61,6 +61,7 @@ import {
 import { getItem, setItem } from "@/utils/db";
 import { PasscodeDialog } from "@/components/PasscodeDialog";
 import { AccountType, AccountConfig, getAvailableSchemas, PRECONFIGURED_OOBIS } from "@/types/accounts";
+import { FIXED_PASSCODES } from "@/config/environment";
 
 const Issuer = () => {
   const navigate = useNavigate();
@@ -111,7 +112,7 @@ const Issuer = () => {
 
   useEffect(() => {
     const attemptReconnect = async () => {
-      const savedData = await getItem<AccountConfig>(`${accountType.toLowerCase()}-issuer-data`);
+      const savedData = await getItem<AccountConfig>(`${accountType.toLowerCase()}-data`);
       if (savedData && savedData.type === accountType) {
         setAccountData(savedData);
         if (savedData.passcode) {
@@ -125,8 +126,10 @@ const Issuer = () => {
   }, [accountType]);
 
   useEffect(() => {
-    if (accountData.passcode) {
-      setItem(`${accountType.toLowerCase()}-issuer-data`, accountData);
+    // Save account data to IndexedDB whenever it changes
+    if (accountData.passcode && accountData.aid) {
+      console.log(`Saving ${accountType} data to IndexedDB...`);
+      setItem(`${accountType.toLowerCase()}-data`, accountData);
     }
   }, [accountData, accountType]);
 
@@ -201,14 +204,21 @@ const Issuer = () => {
         console.log("Credential Registry created:", registrySaid);
       }
 
+      // Store OOBI in IndexedDB for easy access
       setItem(`${accountType.toLowerCase()}-oobi`, oobi);
-      setAccountData((prevData) => ({
-        ...prevData,
+      
+      const updatedAccountData = {
+        ...accountData,
         passcode: userPasscode,
         aid: aid.prefix || aid.d,
         oobi: oobi,
         registrySaid: registrySaid,
-      }));
+      };
+      
+      setAccountData(updatedAccountData);
+      
+      // Persist to IndexedDB immediately
+      await setItem(`${accountType.toLowerCase()}-data`, updatedAccountData);
 
       setIsConnected(true);
       if (isReconnect) {
@@ -313,6 +323,10 @@ const Issuer = () => {
     });
   };
 
+  // Check if this account type has a fixed passcode
+  const hasFixedPasscode = accountType in FIXED_PASSCODES;
+  const fixedPasscode = hasFixedPasscode ? FIXED_PASSCODES[accountType as keyof typeof FIXED_PASSCODES] : undefined;
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-slate-50">
       {/* Header */}
@@ -381,6 +395,11 @@ const Issuer = () => {
               <CardTitle>Initialize {accountType} Issuer Client</CardTitle>
               <CardDescription>
                 Connect to the KERI network and set up your {accountType} issuer identity
+                {hasFixedPasscode && (
+                  <div className="mt-2 p-2 bg-blue-50 rounded text-sm">
+                    <strong>Note:</strong> This account type uses a predefined passcode
+                  </div>
+                )}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -409,11 +428,28 @@ const Issuer = () => {
                   placeholder={`Enter ${accountType} alias`}
                 />
               </div>
-              <PasscodeDialog
-                onPasscodeSubmit={handleConnect}
-                isProcessing={isProcessing}
-                entityType={accountType}
-              />
+              {hasFixedPasscode ? (
+                <div className="space-y-4">
+                  <div className="p-3 bg-green-50 border border-green-200 rounded-md">
+                    <p className="text-green-800 text-sm">
+                      Using predefined passcode for {accountType} account
+                    </p>
+                  </div>
+                  <Button
+                    onClick={() => handleConnect(fixedPasscode!)}
+                    disabled={isProcessing}
+                    className="w-full"
+                  >
+                    {isProcessing ? "Connecting..." : `Connect as ${accountType}`}
+                  </Button>
+                </div>
+              ) : (
+                <PasscodeDialog
+                  onPasscodeSubmit={handleConnect}
+                  isProcessing={isProcessing}
+                  entityType={accountType}
+                />
+              )}
             </CardContent>
           </Card>
         ) : (

@@ -1,6 +1,4 @@
-import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { useConfig } from "@/hooks/useConfig";
+import { useState, useEffect } from "react";
 import {
   Card,
   CardContent,
@@ -14,18 +12,25 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  Users,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  User,
   ArrowLeft,
   Download,
   Send,
-  Eye,
-  CheckCircle,
-  RefreshCw,
-  Clock,
   RotateCcw,
+  CheckCircle,
+  Copy,
+  Wallet,
 } from "lucide-react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
-import { randomPasscode, Serder } from "signify-ts";
+import { randomPasscode, Saider, Serder } from "signify-ts";
 import {
   initializeSignify,
   initializeAndConnectClient,
@@ -52,206 +57,159 @@ import {
   IPEX_APPLY_ROUTE,
   IPEX_OFFER_ROUTE,
   SCHEMA_SERVER_HOST,
+  ipexApplyCredential,
+  ipexOfferCredential,
 } from "../utils/utils";
 import { getItem, setItem } from "@/utils/db";
 import { PasscodeDialog } from "@/components/PasscodeDialog";
-
-import { useSearchParams } from "react-router-dom";
+import { AccountType, AccountConfig, getAvailableSchemas, PRECONFIGURED_OOBIS } from "@/types/accounts";
+import { FIXED_PASSCODES } from "@/config/environment";
 
 const Holder = () => {
-  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { config } = useConfig();
+  const location = useLocation();
   const { toast } = useToast();
   const [isConnected, setIsConnected] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
-  const [isCheckingIncoming, setIsCheckingIncoming] = useState(false);
-  const [isIssuerResolved, setIsIssuerResolved] = useState(false);
-  const [eventSchemaOOBI, setSchemaOOBI] = useState(
-    "https://schema.testnet.gleif.org:7723/oobi/EGUPiCVO73M9worPwR3PfThAtC0AJnH5ZgwsXf6TzbVK"
-  );
-  const [QVISchemaOOBI, setSchemaOOBI2] = useState(
-    "https://schema.testnet.gleif.org:7723/oobi/EBfdlu8R27Fbx-ehrqwImnK-8Cm79sqbAQ4MmvEAYqao"
-  );
-  const [LESchemaOOBI, setSchemaOOBI3] = useState(
-    "https://schema.testnet.gleif.org:7723/oobi/ENPXp1vQzRF6JwIuS-mp2U8Uf1MoADoP_GqQ62VsDZWY"
-  );
-  const testnetGLEIFIssuerOOBI =
-    "https://keria.testnet.gleif.org:3902/oobi/EBY_mvBW59KHb6jH3X4xFxrmNai9ggLtZdkMN7RITtNr/agent/EL-_lAKgnalspJPUKflsNSr_Y3b63tzZ0PK2hxKTepIg";
-
-  const [holderData, setHolderData] = useState({
-    alias: "holderAid",
-    registryName: "issuerRegistry",
-    holderAid: "",
-    holderOOBI: "",
-    holderBran: "",
-  });
   const [holderClient, setHolderClient] = useState(null);
 
-  const [incomingCredentials, setIncomingCredentials] = useState([]);
+  // Get account type from navigation state
+  const accountType = location.state?.accountType as AccountType || 'LE';
+  const [config, setConfig] = useState({
+    adminUrl: "https://keria.testnet.gleif.org:3901",
+    bootUrl: "https://keria.testnet.gleif.org:3903",
+    schemaServer: "https://schema.testnet.gleif.org:7723",
+  });
+
+  useEffect(() => {
+    if (location.state?.config) {
+      setConfig(location.state.config);
+    }
+  }, [location.state]);
+
+  const [accountData, setAccountData] = useState<AccountConfig>({
+    type: accountType,
+    alias: `${accountType.toLowerCase()}HolderAid`,
+    passcode: "",
+    aid: "",
+    oobi: "",
+    registrySaid: "",
+  });
+
+  const [credentials, setCredentials] = useState([]);
+  const [notifications, setNotifications] = useState([]);
+  
+  // Target selection for credential requests
+  const [targetOOBI, setTargetOOBI] = useState("");
+  const [selectedPreconfiguredOOBI, setSelectedPreconfiguredOOBI] = useState("");
+  const [customOOBI, setCustomOOBI] = useState("");
+
+  // Available schemas for this account type
+  const availableSchemas = getAvailableSchemas(accountType);
+  const [selectedSchema, setSelectedSchema] = useState(availableSchemas[0]?.said || "");
 
   useEffect(() => {
     const attemptReconnect = async () => {
-      const savedData = await getItem<any>("holder-data");
-      if (savedData) {
-        setHolderData(savedData);
-        if (savedData.holderBran) {
+      const savedData = await getItem<AccountConfig>(`${accountType.toLowerCase()}-data`);
+      if (savedData && savedData.type === accountType) {
+        setAccountData(savedData);
+        if (savedData.passcode) {
           console.log("Attempting to reconnect with saved passcode...");
-          await handleConnect(savedData.holderBran, true);
+          await handleConnect(savedData.passcode, true);
         }
       }
       setIsInitializing(false);
     };
     attemptReconnect();
-  }, []);
+  }, [accountType]);
 
   useEffect(() => {
-    if (holderData.holderBran) {
-      // Only save if we have a bran
-      setItem("holder-data", holderData);
+    // Save account data to IndexedDB whenever it changes
+    if (accountData.passcode && accountData.aid) {
+      console.log(`Saving ${accountType} holder data to IndexedDB...`);
+      setItem(`${accountType.toLowerCase()}-data`, accountData);
     }
-  }, [holderData]);
-
-  // Auto-check for incoming credentials when connected
-  useEffect(() => {
-    if (isConnected && holderClient) {
-      checkIncomingCredentials();
-      // Set up periodic checking every 30 seconds
-      const interval = setInterval(() => {
-        checkIncomingCredentials();
-      }, 300000);
-      return () => clearInterval(interval);
-    }
-  }, [isConnected, holderClient]);
+  }, [accountData, accountType]);
 
   useEffect(() => {
-    const getCredential = async () => {
-      const credentials = await holderClient?.credentials()?.list();
-
-      console.log("------ ---- Fetched credential:", credentials);
-      if (!credentials || credentials.length === 0) {
-        console.log("No credentials found for this holder.");
-        return;
-      }
-      setCredentials([]);
-      credentials.map((cred) => {
-        setCredentials((prev) => [
-          ...prev,
-          {
-            id: cred.sad.d,
-            said: cred.sad.d,
-            status: cred.status.et || "received",
-            issuer: cred.sad.i,
-            receivedDate: cred.sad.a.dt,
-            claims: {
-              eventName: cred.sad.a.eventName || cred.sad.a.LEI,
-              accessLevel: cred.sad.a.accessLevel,
-              validDate: cred.sad.a.validDate,
-            },
-          },
-        ]);
-      });
-    };
-    getCredential();
-  }, [incomingCredentials, holderData]);
-
-  const [credentials, setCredentials] = useState([]);
-
-  // Determine if we should default to present tab and prefill verifierOOBI
-  const [defaultTab, setDefaultTab] = useState("credentials");
-  const [presentationData, setPresentationData] = useState({
-    verifierOOBI: "",
-    selectedCredential: "",
-  });
-
-  // On mount, check for verifiersOOBI in query params
-  useEffect(() => {
-    const oobi =
-      searchParams.get("verifiersOOBI") || searchParams.get("verifierOOBI");
-    if (oobi) {
-      setDefaultTab("present");
-      setPresentationData((prev) => ({ ...prev, verifierOOBI: oobi }));
-    }
-  }, [searchParams]);
+    const finalOOBI = selectedPreconfiguredOOBI || customOOBI;
+    setTargetOOBI(finalOOBI);
+  }, [selectedPreconfiguredOOBI, customOOBI]);
 
   const handleConnect = async (userPasscode: string, isReconnect = false) => {
     setIsProcessing(true);
     if (isReconnect) {
-      console.log("Reconnecting holder...");
+      console.log(`Reconnecting ${accountType} Holder...`);
     } else {
-      console.log("Connecting holder...");
+      console.log(`Connecting ${accountType} Holder...`);
     }
+    
     try {
-      const holderBran = userPasscode;
-      const holderAidAlias = holderData.alias || "holderAid";
       const { client: holderClient, clientState: holderClientState } =
         await initializeAndConnectClient(
-          holderBran,
+          userPasscode,
           config.adminUrl,
           config.bootUrl
         );
       setHolderClient(holderClient);
-      console.log("Holder client connected:", holderClientState);
+      console.log(`${accountType} holder client connected:`, holderClientState);
 
-      let holderAid, holderOOBI;
+      let aid, oobi;
 
       try {
-        // Check if the AID already exists for this client
-        holderAid = await holderClient.identifiers().get(holderAidAlias);
-        console.log("Existing Holder AID found:", holderAid);
+        aid = await holderClient.identifiers().get(accountData.alias);
+        console.log(`Existing ${accountType} holder AID found:`, aid);
 
-        holderOOBI = await generateOOBI(
-          holderClient,
-          holderAidAlias,
-          ROLE_AGENT
-        );
+        oobi = await generateOOBI(holderClient, accountData.alias, ROLE_AGENT);
       } catch (error) {
-        // If getting AID fails, it likely doesn't exist, so create it.
-        console.log("No existing Holder AID found, creating new one...");
-        const { aid: newHolderAid } = await createNewAID(
+        console.log(`No existing ${accountType} holder AID found, creating new one...`);
+        const { aid: newAid } = await createNewAID(
           holderClient,
-          holderAidAlias,
+          accountData.alias,
           DEFAULT_IDENTIFIER_ARGS
         );
-        holderAid = newHolderAid;
-        console.log("Holder AID created:", holderAid);
+        aid = newAid;
+        console.log(`${accountType} holder AID created:`, aid);
 
         console.log("Adding Agent role to AID...");
-        await addEndRoleForAID(holderClient, holderAidAlias, ROLE_AGENT);
-        holderOOBI = await generateOOBI(
-          holderClient,
-          holderAidAlias,
-          ROLE_AGENT
-        );
-        console.log("Holder OOBI generated:", holderOOBI);
+        await addEndRoleForAID(holderClient, accountData.alias, ROLE_AGENT);
+
+        oobi = await generateOOBI(holderClient, accountData.alias, ROLE_AGENT);
+        console.log(`${accountType} holder OOBI generated:`, oobi);
       }
 
-      setItem("holder-oobi", holderOOBI);
-      setHolderData((prevData) => ({
-        ...prevData,
-        holderBran: holderBran,
-        holderAid: holderAid.prefix || holderAid.d,
-        holderOOBI: holderOOBI,
-      }));
+      // Store OOBI in IndexedDB for easy access
+      setItem(`${accountType.toLowerCase()}-holder-oobi`, oobi);
+      
+      const updatedAccountData = {
+        ...accountData,
+        passcode: userPasscode,
+        aid: aid.prefix || aid.d,
+        oobi: oobi,
+      };
+      
+      setAccountData(updatedAccountData);
+      
+      // Persist to IndexedDB immediately
+      await setItem(`${accountType.toLowerCase()}-data`, updatedAccountData);
 
       setIsConnected(true);
       if (isReconnect) {
         toast({
           title: "Reconnected",
-          description: "Automatically reconnected to KERI network.",
+          description: `Automatically reconnected ${accountType} holder to KERI network.`,
         });
       } else {
         toast({
           title: "Connected to KERI Network",
-          description: "Issuer client initialized and connected.",
+          description: `${accountType} holder client initialized and connected.`,
         });
       }
     } catch (error) {
-      console.error("Error connecting holder client:", error);
+      console.error(`Error connecting ${accountType} holder client:`, error);
       if (isReconnect) {
-        // On reconnect failure, clear the bad passcode so the user has to enter it again
-        setHolderData((prev) => ({ ...prev, holderBran: "" }));
+        setAccountData((prev) => ({ ...prev, passcode: "" }));
       }
       toast({
         title: "Connection Error",
@@ -263,118 +221,47 @@ const Holder = () => {
     }
   };
 
-  const checkIncomingCredentials = async () => {
-    if (!holderClient) return;
-
-    setIsCheckingIncoming(true);
+  const handleRequestCredential = async () => {
+    setIsProcessing(true);
+    console.log("Requesting credential from issuer");
+    
     try {
-      // Ensure necessary OOBIs are resolved before checking notifications.
-      // This could be optimized to only run if needed.
-      // await resolveOOBI(holderClient, eventSchemaOOBI, "eventSchemaOOBI");
-      await resolveOOBI(holderClient, QVISchemaOOBI, "QVISchemaOOBI");
-      await resolveOOBI(holderClient, LESchemaOOBI, "LESchemaOOBI");
-      await resolveOOBI(holderClient, testnetGLEIFIssuerOOBI, "issuerContact");
-      if (!isIssuerResolved) {
-        const issuerOOBI = await getItem("issuer-oobi");
-        if (issuerOOBI) {
-          console.log("Resolving issuer OOBI...");
-          await resolveOOBI(
-            holderClient,
-            issuerOOBI as string,
-            "issuerContact"
-          );
-          setIsIssuerResolved(true);
-        }
-      }
-
-      console.log("Holder checking for incoming credentials...");
-      const grantNotifications = await waitForAndGetNotification(
-        holderClient,
-        IPEX_GRANT_ROUTE
-      );
-
-      if (grantNotifications.length === 0) {
-        console.log("No new grant notifications found.");
+      if (!targetOOBI) {
+        toast({
+          title: "Error",
+          description: "Target issuer OOBI is required to request a credential",
+          variant: "destructive",
+        });
         return;
       }
 
-      console.log(
-        `Found ${grantNotifications.length} incoming grant notification(s).`
-      );
+      // Resolve target OOBI
+      await resolveOOBI(holderClient, targetOOBI, "issuerContact");
 
-      const newIncomingPromises = grantNotifications.map(
-        async (notification) => {
-          const grantExchange = await holderClient
-            .exchanges()
-            .get(notification.a.d);
-          return {
-            id: notification.i, // Use the notification ID as the unique key
-            notificationId: notification.i, // Correctly assign the notification ID
-            grantSaid: grantExchange.exn.d,
-            receivedAt: grantExchange.exn.dt,
-            status: "pending",
-            issuer: grantExchange.exn.i || "Unknown Issuer",
-          };
-        }
-      );
+      // Resolve schema OOBI
+      const schemaOOBI = `${config.schemaServer}/oobi/${selectedSchema}`;
+      await resolveOOBI(holderClient, schemaOOBI, "schemaContact");
 
-      const newIncoming = await Promise.all(newIncomingPromises);
+      console.log("Schema resolved from OOBI:", schemaOOBI);
 
-      // Filter out credentials that are already in the incoming list to avoid duplicates
-      setIncomingCredentials((prev) => {
-        const existingIds = new Set(prev.map((c) => c.id));
-        const uniqueNew = newIncoming.filter((c) => !existingIds.has(c.id));
-        return [...prev, ...uniqueNew];
-      });
-    } catch (error) {
-      console.log("No incoming credentials found or error:", error.message);
-    } finally {
-      setIsCheckingIncoming(false);
-    }
-  };
-
-  const handleAdmitCredential = async (incomingCred) => {
-    if (!holderClient) return;
-
-    setIsProcessing(true);
-    try {
-      console.log("Holder admitting credential:", incomingCred.grantSaid);
-
-      // Admit the grant
-      const admitResponse = await ipexAdmitGrant(
+      const applyResponse = await ipexApplyCredential(
         holderClient,
-        holderData.alias,
-        incomingCred.issuer,
-        incomingCred.grantSaid
+        accountData.alias,
+        targetOOBI.split('/').pop() || "", // Extract AID from OOBI
+        selectedSchema
       );
-      console.log("Holder admitting credential");
 
-      // Mark notification as read
-      await markNotificationRead(holderClient, incomingCred.notificationId);
-
-      // Update the incoming credential status
-      setIncomingCredentials((prev) =>
-        prev.map((cred) =>
-          cred.id === incomingCred.id ? { ...cred, status: "admitted" } : cred
-        )
-      );
+      console.log(`${accountType} holder applied for credential.`);
 
       toast({
-        title: "Credential Admitted",
-        description: "Credential has been successfully admitted to your wallet",
+        title: "Credential Request Sent",
+        description: "Your credential request has been sent to the issuer",
       });
-
-      setTimeout(() => {
-        // Remove from incoming after successful admit
-        setIncomingCredentials((prev) =>
-          prev.filter((cred) => cred.id !== incomingCred.id)
-        );
-      }, 2000);
     } catch (error) {
-      console.error("Error admitting credential:", error);
+      console.error("Error requesting credential:", error);
       toast({
         title: "ERROR",
-        description: "Failed to admit credential",
+        description: "Failed to request credential",
         variant: "destructive",
       });
     } finally {
@@ -382,64 +269,17 @@ const Holder = () => {
     }
   };
 
-  const handlePresentCredential = async () => {
-    setIsProcessing(true);
-    const { verifierOOBI, selectedCredential } = presentationData;
-    // Extract the Verifier AID from the OOBI URL
-    let verifierAid = "";
-    try {
-      const parts = verifierOOBI.split("/oobi/");
-      if (parts.length > 1) {
-        verifierAid = parts[1].split("/")[0];
-      }
-    } catch (e) {
-      verifierAid = "";
-    }
-    if (!verifierAid) {
-      toast({
-        title: "Invalid Verifier OOBI",
-        description: "Please enter a valid Verifier OOBI URL",
-        variant: "destructive",
-      });
-      setIsProcessing(false);
-      return;
-    } else {
-      resolveOOBI(holderClient, verifierOOBI, "verifierContact").catch(
-        (error) => {
-          console.error("Error resolving Verifier OOBI:", error);
-          toast({
-            title: "ERROR",
-            description: "Failed to resolve Verifier OOBI",
-            variant: "destructive",
-          });
-          setIsProcessing(false);
-        }
-      );
-
-      console.log("selectedCredential", selectedCredential);
-      // Holder - get credential (with all its data)
-      const credential = await holderClient
-        .credentials()
-        .get(selectedCredential);
-
-      // Holder - Ipex grant
-      console.log("Granting credential from holder to issuer");
-      const grantResponse = await ipexGrantCredential(
-        holderClient,
-        holderData.alias,
-        verifierAid,
-        credential
-      );
-    }
-    setTimeout(() => {
-      setIsProcessing(false);
-      toast({
-        title: "Credential Presented",
-        description:
-          "ACDC credential has been successfully presented to verifier",
-      });
-    }, 3000);
+  const copyOOBIToClipboard = () => {
+    navigator.clipboard.writeText(accountData.oobi);
+    toast({
+      title: "OOBI Copied",
+      description: "OOBI has been copied to clipboard",
+    });
   };
+
+  // Check if this account type has a fixed passcode
+  const hasFixedPasscode = accountType in FIXED_PASSCODES;
+  const fixedPasscode = hasFixedPasscode ? FIXED_PASSCODES[accountType as keyof typeof FIXED_PASSCODES] : undefined;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-50 to-slate-50">
@@ -458,14 +298,14 @@ const Holder = () => {
             </Button>
             <div className="flex items-center gap-3">
               <div className="p-2 bg-green-600 rounded-lg">
-                <Users className="h-6 w-6 text-white" />
+                <User className="h-6 w-6 text-white" />
               </div>
               <div>
                 <h1 className="text-2xl font-bold text-slate-900">
-                  Holder Dashboard
+                  {accountType} Holder Dashboard
                 </h1>
                 <p className="text-slate-600">
-                  Receive, store, and present credentials
+                  Receive, store, and present credentials as {accountType}
                 </p>
               </div>
             </div>
@@ -506,9 +346,14 @@ const Holder = () => {
         ) : !isConnected ? (
           <Card className="max-w-2xl mx-auto">
             <CardHeader className="text-center">
-              <CardTitle>Initialize Holder Client</CardTitle>
+              <CardTitle>Initialize {accountType} Holder Client</CardTitle>
               <CardDescription>
-                Connect to the KERI network and set up your holder identity
+                Connect to the KERI network and set up your {accountType} holder identity
+                {hasFixedPasscode && (
+                  <div className="mt-2 p-2 bg-blue-50 rounded text-sm">
+                    <strong>Note:</strong> This account type uses a predefined passcode
+                  </div>
+                )}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -527,253 +372,183 @@ const Holder = () => {
                 </div>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="alias">Holder AID Alias</Label>
+                <Label htmlFor="alias">{accountType} Holder AID Alias</Label>
                 <Input
                   id="alias"
-                  value={holderData.alias}
+                  value={accountData.alias}
                   onChange={(e) =>
-                    setHolderData({ ...holderData, alias: e.target.value })
+                    setAccountData({ ...accountData, alias: e.target.value })
                   }
-                  placeholder="Enter holder alias"
+                  placeholder={`Enter ${accountType} holder alias`}
                 />
               </div>
-              <PasscodeDialog
-                onPasscodeSubmit={handleConnect}
-                isProcessing={isProcessing}
-                entityType="holder"
-              />
+              
+              {hasFixedPasscode ? (
+                <div className="space-y-4">
+                  <div className="p-3 bg-green-50 border border-green-200 rounded-md">
+                    <p className="text-green-800 text-sm">
+                      Using predefined passcode for {accountType} account
+                    </p>
+                  </div>
+                  <Button
+                    onClick={() => handleConnect(fixedPasscode!)}
+                    disabled={isProcessing}
+                    className="w-full"
+                  >
+                    {isProcessing ? "Connecting..." : `Connect as ${accountType}`}
+                  </Button>
+                </div>
+              ) : (
+                <PasscodeDialog
+                  onPasscodeSubmit={handleConnect}
+                  isProcessing={isProcessing}
+                  entityType={accountType}
+                />
+              )}
             </CardContent>
           </Card>
         ) : (
-          <Tabs defaultValue={defaultTab} className="space-y-6">
+          <Tabs defaultValue="request" className="space-y-6">
             <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="credentials">My Credentials</TabsTrigger>
-              <TabsTrigger value="present">Present Credential</TabsTrigger>
+              <TabsTrigger value="request">Request Credentials</TabsTrigger>
+              <TabsTrigger value="wallet">My Wallet</TabsTrigger>
               <TabsTrigger value="settings">Settings</TabsTrigger>
             </TabsList>
 
-            <TabsContent value="credentials" className="space-y-6">
-              {/* Incoming Credentials Section */}
+            <TabsContent value="request" className="space-y-6">
               <Card>
                 <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <CardTitle className="flex items-center gap-2">
-                        <Clock className="h-5 w-5" />
-                        Incoming Credentials
-                      </CardTitle>
-                      <CardDescription>
-                        New credentials awaiting your approval
-                      </CardDescription>
-                    </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={checkIncomingCredentials}
-                      disabled={isCheckingIncoming}
-                      className="flex items-center gap-2"
-                    >
-                      <RefreshCw
-                        className={`h-4 w-4 ${
-                          isCheckingIncoming ? "animate-spin" : ""
-                        }`}
-                      />
-                      {isCheckingIncoming ? "Checking..." : "Check Now"}
-                    </Button>
+                  <CardTitle className="flex items-center gap-2">
+                    <Download className="h-5 w-5" />
+                    Request New Credential as {accountType}
+                  </CardTitle>
+                  <CardDescription>
+                    Request an ACDC credential from an issuer
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {/* Schema Selection */}
+                  <div className="space-y-2">
+                    <Label htmlFor="schema">Available Schemas for {accountType}</Label>
+                    <Select value={selectedSchema} onValueChange={setSelectedSchema}>
+                      <SelectTrigger id="schema">
+                        <SelectValue placeholder="Select schema to request" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableSchemas.map((schema) => (
+                          <SelectItem key={schema.said} value={schema.said}>
+                            <div>
+                              <div className="font-medium">{schema.name}</div>
+                              <div className="text-xs text-slate-500">{schema.description}</div>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
+
+                  {/* Target Selection */}
+                  <div className="space-y-4">
+                    <Label>Issuer OOBI</Label>
+                    
+                    {/* Preconfigured OOBIs */}
+                    {PRECONFIGURED_OOBIS[accountType].length > 0 && (
+                      <div className="space-y-2">
+                        <Label htmlFor="preconfiguredOOBI">Preconfigured Issuers</Label>
+                        <Select value={selectedPreconfiguredOOBI} onValueChange={setSelectedPreconfiguredOOBI}>
+                          <SelectTrigger id="preconfiguredOOBI">
+                            <SelectValue placeholder="Select preconfigured issuer" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {PRECONFIGURED_OOBIS[accountType].map((oobi, index) => (
+                              <SelectItem key={index} value={oobi}>
+                                <div className="font-mono text-xs">
+                                  {oobi.substring(0, 60)}...
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+
+                    {/* Custom OOBI */}
+                    <div className="space-y-2">
+                      <Label htmlFor="customOOBI">Or Enter Custom Issuer OOBI</Label>
+                      <Input
+                        id="customOOBI"
+                        value={customOOBI}
+                        onChange={(e) => setCustomOOBI(e.target.value)}
+                        placeholder="Enter issuer OOBI"
+                      />
+                    </div>
+
+                    {/* Final OOBI Display */}
+                    {targetOOBI && (
+                      <div className="space-y-2">
+                        <Label>Selected Issuer OOBI</Label>
+                        <div className="p-2 bg-gray-50 rounded text-xs font-mono break-all">
+                          {targetOOBI}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <Button
+                    onClick={handleRequestCredential}
+                    disabled={isProcessing || !targetOOBI || !selectedSchema}
+                    className="w-full"
+                  >
+                    <Send className="h-4 w-4 mr-2" />
+                    {isProcessing ? "Requesting Credential..." : "Request Credential"}
+                  </Button>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="wallet" className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Wallet className="h-5 w-5" />
+                    My Credentials
+                  </CardTitle>
+                  <CardDescription>
+                    View and manage all credentials in your {accountType} wallet
+                  </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  {incomingCredentials.length === 0 ? (
-                    <div className="text-center py-8 text-slate-500">
-                      <Clock className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                      <p>No incoming credentials found</p>
-                      <p className="text-sm">
-                        Check back later or use the refresh button
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                      {incomingCredentials.map((incomingCred) => (
+                  <div className="space-y-4">
+                    {credentials.length === 0 ? (
+                      <div className="text-center py-8 text-slate-500">
+                        No credentials in wallet yet
+                      </div>
+                    ) : (
+                      credentials.map((credential) => (
                         <div
-                          key={incomingCred.id}
+                          key={credential.id}
                           className="border rounded-lg p-4 space-y-3"
                         >
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-3">
                               <div className="text-sm font-mono text-slate-600">
-                                {incomingCred.grantSaid.substring(0, 20)}...
+                                {credential.said?.substring(0, 20)}...
                               </div>
                               <Badge
                                 variant={
-                                  incomingCred.status === "admitted"
+                                  credential.status === "valid"
                                     ? "default"
-                                    : "secondary"
+                                    : "destructive"
                                 }
                               >
-                                {incomingCred.status}
+                                {credential.status}
                               </Badge>
                             </div>
-                            <Button
-                              variant="default"
-                              size="sm"
-                              onClick={() =>
-                                handleAdmitCredential(incomingCred)
-                              }
-                              disabled={
-                                isProcessing ||
-                                incomingCred.status === "admitted"
-                              }
-                            >
-                              {incomingCred.status === "admitted"
-                                ? "Admitted"
-                                : "Admit Credential"}
-                            </Button>
-                          </div>
-                          <div className="grid grid-cols-2 gap-4 text-sm">
-                            <div>
-                              <span className="text-slate-500">From:</span>
-                              <div className="font-medium font-mono text-xs">
-                                {incomingCred.issuer.substring(0, 20)}...
-                              </div>
-                            </div>
-                            <div>
-                              <span className="text-slate-500">Received:</span>
-                              <div className="font-medium">
-                                {new Date(
-                                  incomingCred.receivedAt
-                                ).toLocaleString()}
-                              </div>
-                            </div>
                           </div>
                         </div>
-                      ))}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-
-              {/* Stored Credentials Section */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Stored Credentials</CardTitle>
-                  <CardDescription>
-                    View and manage all credentials in your wallet
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    {credentials.map((credential) => (
-                      <div
-                        key={credential.id}
-                        className="border rounded-lg p-4 space-y-3"
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <div className="text-sm font-mono text-slate-600">
-                              {credential.said.substring(0, 20)}...
-                            </div>
-                            <Badge variant="default">{credential.status}</Badge>
-                          </div>
-                          <Button variant="outline" size="sm">
-                            <Eye className="h-4 w-4 mr-2" />
-                            View Details
-                          </Button>
-                        </div>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                          <div>
-                            <span className="text-slate-500">Event:</span>
-                            <div className="font-medium">
-                              {credential.claims.eventName}
-                            </div>
-                          </div>
-                          <div>
-                            <span className="text-slate-500">Access:</span>
-                            <div className="font-medium">
-                              {credential.claims.accessLevel}
-                            </div>
-                          </div>
-                          <div>
-                            <span className="text-slate-500">Valid Until:</span>
-                            <div className="font-medium">
-                              {credential.claims.validDate}
-                            </div>
-                          </div>
-                          <div>
-                            <span className="text-slate-500">Received:</span>
-                            <div className="font-medium">
-                              {credential.receivedDate}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
+                      ))
+                    )}
                   </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            <TabsContent value="present" className="space-y-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Send className="h-5 w-5" />
-                    Present Credential
-                  </CardTitle>
-                  <CardDescription>
-                    Share your credential with a verifier using IPEX protocol
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="verifierOOBI">Verifier OOBI</Label>
-                    <Input
-                      id="verifierOOBI"
-                      value={presentationData.verifierOOBI}
-                      onChange={(e) =>
-                        setPresentationData({
-                          ...presentationData,
-                          verifierOOBI: e.target.value,
-                        })
-                      }
-                      placeholder="Enter verifier's OOBI"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="credential">Select Credential</Label>
-                    <select
-                      className="w-full p-2 border rounded-md"
-                      value={presentationData.selectedCredential}
-                      onChange={(e) =>
-                        setPresentationData({
-                          ...presentationData,
-                          selectedCredential: e.target.value,
-                        })
-                      }
-                    >
-                      <option value="">Choose a credential...</option>
-                      {credentials.map((cred) => (
-                        <option key={cred.id} value={cred.id}>
-                          {(cred.claims?.eventName || cred.id) +
-                            " - " +
-                            (cred.claims?.accessLevel || cred.receivedDate)}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <Button
-                    onClick={handlePresentCredential}
-                    disabled={
-                      isProcessing ||
-                      !presentationData.verifierOOBI ||
-                      !presentationData.selectedCredential
-                    }
-                    className="w-full"
-                  >
-                    <Send className="h-4 w-4 mr-2" />
-                    {isProcessing
-                      ? "Presenting Credential..."
-                      : "Present Credential"}
-                  </Button>
                 </CardContent>
               </Card>
             </TabsContent>
@@ -781,9 +556,9 @@ const Holder = () => {
             <TabsContent value="settings" className="space-y-6">
               <Card>
                 <CardHeader>
-                  <CardTitle>Holder Configuration</CardTitle>
+                  <CardTitle>{accountType} Holder Configuration</CardTitle>
                   <CardDescription>
-                    Manage your holder settings and network configuration
+                    Manage your {accountType} holder settings and network configuration
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -798,13 +573,37 @@ const Holder = () => {
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <Label>AID Alias</Label>
-                    <Input value={holderData.alias} readOnly />
+                    <Label>Account Type</Label>
+                    <Input value={accountType} readOnly />
                   </div>
+                  <div className="space-y-2">
+                    <Label>AID Alias</Label>
+                    <Input value={accountData.alias} readOnly />
+                  </div>
+                  
+                  {/* OOBI Display */}
+                  {accountData.oobi && (
+                    <div className="space-y-2">
+                      <Label>Your OOBI</Label>
+                      <div className="flex gap-2">
+                        <div className="flex-1 p-2 bg-gray-50 rounded text-xs font-mono break-all">
+                          {accountData.oobi}
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={copyOOBIToClipboard}
+                        >
+                          <Copy className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                  
                   <div className="flex items-center gap-2 p-4 bg-green-50 rounded-lg">
                     <CheckCircle className="h-5 w-5 text-green-600" />
                     <span className="text-green-700">
-                      Connected to KERI network
+                      Connected to KERI network as {accountType} holder
                     </span>
                   </div>
                 </CardContent>
