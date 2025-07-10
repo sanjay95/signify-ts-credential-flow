@@ -9,7 +9,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -26,6 +25,8 @@ import {
   Send,
   RotateCcw,
   CheckCircle,
+  Copy,
+  Building,
 } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
@@ -58,39 +59,8 @@ import {
   SCHEMA_SERVER_HOST,
 } from "../utils/utils";
 import { getItem, setItem } from "@/utils/db";
-import { set } from "date-fns";
 import { PasscodeDialog } from "@/components/PasscodeDialog";
-import { get } from "http";
-const QVI_SCHEMA_SAID = "EBfdlu8R27Fbx-ehrqwImnK-8Cm79sqbAQ4MmvEAYqao";
-const LE_SCHEMA_SAID = "ENPXp1vQzRF6JwIuS-mp2U8Uf1MoADoP_GqQ62VsDZWY";
-const EVENT_SCHEMA_SAID = "EGUPiCVO73M9worPwR3PfThAtC0AJnH5ZgwsXf6TzbVK";
-
-const VC_SCHEMAS = [
-  {
-    label: "Event",
-    value: "event",
-    said: EVENT_SCHEMA_SAID,
-    fields: [
-      { name: "eventName", label: "Event Name", type: "text" },
-      { name: "accessLevel", label: "Access Level", type: "text" },
-      { name: "validDate", label: "Valid Date", type: "date" },
-    ],
-    defaultData: {
-      eventName: "GLEIF Summit",
-      accessLevel: "staff",
-      validDate: "2026-10-01",
-    },
-  },
-  {
-    label: "LE",
-    value: "le",
-    said: LE_SCHEMA_SAID,
-    fields: [{ name: "LEI", label: "LEI", type: "text" }],
-    defaultData: {
-      LEI: "875500ELOZEL05BVXV37",
-    },
-  },
-];
+import { AccountType, AccountConfig, getAvailableSchemas, PRECONFIGURED_OOBIS } from "@/types/accounts";
 
 const Issuer = () => {
   const navigate = useNavigate();
@@ -99,21 +69,15 @@ const Issuer = () => {
   const [isConnected, setIsConnected] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
-  // VC type state
-  const [vcType, setVcType] = useState("event");
-  const [schemaSaid, setSchemaSaid] = useState(EVENT_SCHEMA_SAID);
+  const [issuerClient, setIssuerClient] = useState(null);
 
-  const [isHolderConnected, setIsHolderConnected] = useState(false);
-
-  // Get config from navigation state
+  // Get account type from navigation state
+  const accountType = location.state?.accountType as AccountType || 'GLEIF';
   const [config, setConfig] = useState({
     adminUrl: "https://keria.testnet.gleif.org:3901",
     bootUrl: "https://keria.testnet.gleif.org:3903",
     schemaServer: "https://schema.testnet.gleif.org:7723",
   });
-  const [schemaOOBI, setSchemaOOBI] = useState(
-    `${config.schemaServer}/oobi/${EVENT_SCHEMA_SAID}`
-  );
 
   useEffect(() => {
     if (location.state?.config) {
@@ -121,113 +85,81 @@ const Issuer = () => {
     }
   }, [location.state]);
 
-  const [issuerData, setIssuerData] = useState({
-    alias: "issuerAid",
-    registryName: "issuerRegistry",
-    issuerAid: "",
-    issuerOOBI: "",
-    issuerBran: "",
+  const [accountData, setAccountData] = useState<AccountConfig>({
+    type: accountType,
+    alias: `${accountType.toLowerCase()}Aid`,
+    passcode: "",
+    aid: "",
+    oobi: "",
     registrySaid: "",
   });
 
-  const [issuerClient, setIssuerClient] = useState(null);
+  const [credentials, setCredentials] = useState([]);
+  const [isNewCredential, setNewCredential] = useState(false);
+
+  // Available schemas for this account type
+  const availableSchemas = getAvailableSchemas(accountType);
+  const [selectedSchema, setSelectedSchema] = useState(availableSchemas[0]?.said || "");
+  
+  // Target selection
+  const [targetOOBI, setTargetOOBI] = useState("");
+  const [selectedPreconfiguredOOBI, setSelectedPreconfiguredOOBI] = useState("");
+  const [customOOBI, setCustomOOBI] = useState("");
+
+  // Dynamic credential data
+  const [credentialData, setCredentialData] = useState<Record<string, any>>({});
 
   useEffect(() => {
     const attemptReconnect = async () => {
-      const savedData = await getItem<any>("issuer-data");
-      if (savedData) {
-        setIssuerData(savedData);
-        if (savedData.issuerBran) {
+      const savedData = await getItem<AccountConfig>(`${accountType.toLowerCase()}-issuer-data`);
+      if (savedData && savedData.type === accountType) {
+        setAccountData(savedData);
+        if (savedData.passcode) {
           console.log("Attempting to reconnect with saved passcode...");
-          await handleConnect(savedData.issuerBran, true);
+          await handleConnect(savedData.passcode, true);
         }
       }
       setIsInitializing(false);
     };
     attemptReconnect();
-  }, []);
-
-  const [credentials, setCredentials] = useState([]);
-  const [isNewCredential, setNewCredential] = useState(false);
+  }, [accountType]);
 
   useEffect(() => {
-    const getCredential = async () => {
-      const credentials = await issuerClient?.credentials()?.list();
-      console.log("------ ---- Fetched credential:", credentials);
-      setCredentials([]);
-      credentials?.map((credential) => {
-        setCredentials((prev) => [
-          ...prev,
-          {
-            id: credential.sad.d,
-            said: credential.sad.d,
-            status: "issued",
-            holder: holderAid,
-            issuedDate: credential.sad.a.dt,
-            claims: {
-              eventName: credential.sad.a.eventName,
-              accessLevel: credential.sad.a.accessLevel,
-              validDate: credential.sad.a.validDate,
-            },
-          },
-        ]);
-      });
-    };
-    getCredential();
-  }, [isNewCredential, issuerData]);
-
-  // Dynamic credential data based on VC type
-  const [credentialData, setCredentialData] = useState(
-    VC_SCHEMAS[0].defaultData
-  );
-  // Update schema and form fields when VC type changes
-  useEffect(() => {
-    const selected = VC_SCHEMAS.find((s) => s.value === vcType);
-    if (selected) {
-      setSchemaSaid(selected.said);
-      setSchemaOOBI(
-        `https://schema.testnet.gleif.org:7723/oobi/${selected.said}`
-      );
-      setCredentialData(selected.defaultData);
+    if (accountData.passcode) {
+      setItem(`${accountType.toLowerCase()}-issuer-data`, accountData);
     }
-  }, [vcType]);
-  const [holderAid, setHolderAid] = useState("");
+  }, [accountData, accountType]);
 
   useEffect(() => {
-    if (issuerData.issuerBran) {
-      // Only save if we have a bran
-      setItem("issuer-data", issuerData);
-    }
-  }, [issuerData]);
+    const finalOOBI = selectedPreconfiguredOOBI || customOOBI;
+    setTargetOOBI(finalOOBI);
+  }, [selectedPreconfiguredOOBI, customOOBI]);
 
   const handleConnect = async (userPasscode: string, isReconnect = false) => {
     setIsProcessing(true);
     if (isReconnect) {
-      console.log("Reconnecting Issuer...");
+      console.log(`Reconnecting ${accountType} Issuer...`);
     } else {
-      console.log("Connecting Issuer...");
+      console.log(`Connecting ${accountType} Issuer...`);
     }
+    
     try {
-      const issuerBran = userPasscode;
-      const issuerAidAlias = issuerData.alias || "issuerAid";
       const { client: issuerClient, clientState: issuerClientState } =
         await initializeAndConnectClient(
-          issuerBran,
+          userPasscode,
           config.adminUrl,
           config.bootUrl
         );
       setIssuerClient(issuerClient);
-      console.log("Issuer client connected:", issuerClientState);
+      console.log(`${accountType} client connected:`, issuerClientState);
 
-      let issuerAid, registrySaid, issuerOOBI;
+      let aid, registrySaid, oobi;
 
       try {
-        // Check if the AID already exists for this client
-        issuerAid = await issuerClient.identifiers().get(issuerAidAlias);
-        console.log("Existing Issuer AID found:", issuerAid);
+        aid = await issuerClient.identifiers().get(accountData.alias);
+        console.log(`Existing ${accountType} AID found:`, aid);
 
-        // Check if the registry exists
-        const registries = await issuerClient.registries().list(issuerAidAlias);
+        const registries = await issuerClient.registries().list(accountData.alias);
         if (registries.length > 0) {
           registrySaid = registries[0].regk;
           console.log("Existing registry found:", registrySaid);
@@ -235,55 +167,46 @@ const Issuer = () => {
           console.log("No existing registry found, creating new one...");
           const regResult = await createCredentialRegistry(
             issuerClient,
-            issuerAidAlias,
-            issuerData.registryName
+            accountData.alias,
+            `${accountType.toLowerCase()}Registry`
           );
           registrySaid = regResult.registrySaid;
           console.log("New registry created:", registrySaid);
         }
 
-        issuerOOBI = await generateOOBI(
-          issuerClient,
-          issuerAidAlias,
-          ROLE_AGENT
-        );
+        oobi = await generateOOBI(issuerClient, accountData.alias, ROLE_AGENT);
       } catch (error) {
-        // If getting AID fails, it likely doesn't exist, so create it.
-        console.log("No existing Issuer AID found, creating new one...");
-        const { aid: newIssuerAid } = await createNewAID(
+        console.log(`No existing ${accountType} AID found, creating new one...`);
+        const { aid: newAid } = await createNewAID(
           issuerClient,
-          issuerAidAlias,
+          accountData.alias,
           DEFAULT_IDENTIFIER_ARGS
         );
-        issuerAid = newIssuerAid;
-        console.log("Issuer AID created:", issuerAid);
+        aid = newAid;
+        console.log(`${accountType} AID created:`, aid);
 
         console.log("Adding Agent role to AID...");
-        await addEndRoleForAID(issuerClient, issuerAidAlias, ROLE_AGENT);
+        await addEndRoleForAID(issuerClient, accountData.alias, ROLE_AGENT);
 
-        issuerOOBI = await generateOOBI(
-          issuerClient,
-          issuerAidAlias,
-          ROLE_AGENT
-        );
-        console.log("Issuer OOBI generated:", issuerOOBI);
+        oobi = await generateOOBI(issuerClient, accountData.alias, ROLE_AGENT);
+        console.log(`${accountType} OOBI generated:`, oobi);
 
         console.log("Creating Credential Registry...");
         const regResult = await createCredentialRegistry(
           issuerClient,
-          issuerAidAlias,
-          issuerData.registryName
+          accountData.alias,
+          `${accountType.toLowerCase()}Registry`
         );
         registrySaid = regResult.registrySaid;
         console.log("Credential Registry created:", registrySaid);
       }
 
-      setItem("issuer-oobi", issuerOOBI);
-      setIssuerData((prevData) => ({
+      setItem(`${accountType.toLowerCase()}-oobi`, oobi);
+      setAccountData((prevData) => ({
         ...prevData,
-        issuerBran: issuerBran,
-        issuerAid: issuerAid.prefix || issuerAid.d,
-        issuerOOBI: issuerOOBI,
+        passcode: userPasscode,
+        aid: aid.prefix || aid.d,
+        oobi: oobi,
         registrySaid: registrySaid,
       }));
 
@@ -291,19 +214,18 @@ const Issuer = () => {
       if (isReconnect) {
         toast({
           title: "Reconnected",
-          description: "Automatically reconnected to KERI network.",
+          description: `Automatically reconnected ${accountType} to KERI network.`,
         });
       } else {
         toast({
           title: "Connected to KERI Network",
-          description: "Issuer client initialized and connected.",
+          description: `${accountType} issuer client initialized and connected.`,
         });
       }
     } catch (error) {
-      console.error("Error connecting issuer client:", error);
+      console.error(`Error connecting ${accountType} client:`, error);
       if (isReconnect) {
-        // On reconnect failure, clear the bad passcode so the user has to enter it again
-        setIssuerData((prev) => ({ ...prev, issuerBran: "" }));
+        setAccountData((prev) => ({ ...prev, passcode: "" }));
       }
       toast({
         title: "Connection Error",
@@ -317,147 +239,77 @@ const Issuer = () => {
 
   const handleIssueCredential = async () => {
     setIsProcessing(true);
-    console.log("issuing credential to holder");
+    console.log("Issuing credential to target");
+    
     try {
-      if (!holderAid) {
+      if (!targetOOBI) {
         toast({
           title: "Error",
-          description: "Holder AID is required to issue a credential",
+          description: "Target OOBI is required to issue a credential",
           variant: "destructive",
         });
-        setIsProcessing(false);
         return;
       }
-      console.log("Issuer Data:", issuerData);
+
+      // Resolve target OOBI
+      await resolveOOBI(issuerClient, targetOOBI, "targetContact");
+
+      // Resolve schema OOBI
+      const schemaOOBI = `${config.schemaServer}/oobi/${selectedSchema}`;
       await resolveOOBI(issuerClient, schemaOOBI, "schemaContact");
 
-      const holderOOBI = (await getItem("holder-oobi")) as string;
-      await resolveOOBI(issuerClient, holderOOBI, "holderContact");
       console.log("Schema resolved from OOBI:", schemaOOBI);
-      let credentialSaid;
-      if (credentialData.hasOwnProperty("LEI")) {
-        console.log("Issuing as QVI");
-        console.log("finding QVI credentials");
-        let filter: { [x: string]: any } = { "-s": QVI_SCHEMA_SAID };
-        const QviCredential = await issuerClient.credentials().list({ filter });
-        console.log("QVI Credentials:", QviCredential);
-        console.log("sadify rules for GLIEF chain");
-        const rules = {
-          d: "",
-          usageDisclaimer: {
-            l: "Usage of a valid, unexpired, and non-revoked vLEI Credential, as defined in the associated Ecosystem Governance Framework, does not assert that the Legal Entity is trustworthy, honest, reputable in its business dealings, safe to do business with, or compliant with any laws or that an implied or expressly intended purpose will be fulfilled.",
-          },
-          issuanceDisclaimer: {
-            l: "All information in a valid, unexpired, and non-revoked vLEI Credential, as defined in the associated Ecosystem Governance Framework, is accurate as of the date the validation process was complete. The vLEI Credential has been issued to the legal entity or person named in the vLEI Credential as the subject; and the qualified vLEI Issuer exercised reasonable care to perform the validation process set forth in the vLEI Ecosystem Governance Framework.",
-          },
-        };
-        console.log("rules", rules);
 
-        const leRules = Saider.saidify(rules)[1];
-        console.log("leRules", leRules);
-
-        console.log("sadify edge for GLIEF chain");
-        // console.log("QviCredential.sad.d", QviCredential.sad.d);
-        // console.log("QviCredential.sad.s", QviCredential.sad.s);
-        const edge = {
-          d: "",
-          qvi: {
-            n: QviCredential[0].sad.d,
-            s: QviCredential[0].sad.s,
-          },
-        };
-
-        const leEdge = Saider.saidify(edge)[1];
-        console.log("sadifying done:");
-        console.log("starting issuing QVI credential");
-        credentialSaid = await issueCredential(
-          issuerClient,
-          issuerData.alias,
-          issuerData.registrySaid,
-          LE_SCHEMA_SAID,
-          holderAid,
-          credentialData,
-          leEdge,
-          leRules
-        );
-      } else {
-        credentialSaid = await issueCredential(
-          issuerClient,
-          issuerData.alias,
-          issuerData.registrySaid,
-          schemaSaid,
-          holderAid,
-          credentialData
-        );
-      }
-
-      console.log(
-        "Credential issued with SAID:",
-        credentialSaid.credentialSaid || credentialSaid
+      const credentialSaid = await issueCredential(
+        issuerClient,
+        accountData.alias,
+        accountData.registrySaid,
+        selectedSchema,
+        targetOOBI.split('/').pop() || "", // Extract AID from OOBI
+        credentialData
       );
+
+      console.log("Credential issued with SAID:", credentialSaid.credentialSaid || credentialSaid);
+      
       const credential = await issuerClient
         .credentials()
         .get(credentialSaid.credentialSaid || credentialSaid);
+      
       setNewCredential(true);
 
       console.log("Credential details:", credential);
-      console.log("granting credential to holder");
+      console.log("Granting credential to target");
+      
       const grantResponse = await ipexGrantCredential(
         issuerClient,
-        issuerData.alias,
-        holderAid,
+        accountData.alias,
+        targetOOBI.split('/').pop() || "",
         credential
       );
 
-      console.log("Issuer created and granted credential.");
+      console.log(`${accountType} created and granted credential.`);
 
-      setIsProcessing(false);
       toast({
         title: "Credential Issued",
-        description:
-          "ACDC credential has been successfully created and granted to holder",
+        description: "ACDC credential has been successfully created and granted to target",
       });
     } catch (error) {
       console.error("Error issuing credential:", error);
-      setIsProcessing(false);
       toast({
         title: "ERROR",
         description: "Failed to issue credential",
+        variant: "destructive",
       });
     } finally {
       setIsProcessing(false);
     }
   };
 
-  const handleRevokeCredential = async (credentialId: string) => {
-    setIsProcessing(true);
-    const revokeResult = await issuerClient
-      .credentials()
-      .revoke(issuerData.alias, credentialId);
-
-    const revokeOperation = revokeResult.op; // Get the operation from the result
-
-    // Wait for the revocation operation to complete.
-    const revokeResponse = await issuerClient
-      .operations()
-      .wait(revokeOperation, AbortSignal.timeout(DEFAULT_TIMEOUT_MS)); // Used revokeOperation directly
-
-    // Log the credential status after revocation.
-    // Note the 'et: "rev"' indicating it's now revoked, and the sequence number 's' has incremented.
-    const statusAfter = (await issuerClient.credentials().get(credentialId))
-      .status;
-    console.log("✅ Credential status after revocation:", statusAfter);
-
-    setCredentials(
-      credentials.map((cred) =>
-        cred.id === credentialId ? { ...cred, status: "revoked" } : cred
-      )
-    );
-
-    setIsProcessing(false);
+  const copyOOBIToClipboard = () => {
+    navigator.clipboard.writeText(accountData.oobi);
     toast({
-      title: "Credential Revoked",
-      description: "Credential status updated in TEL and propagated to network",
+      title: "OOBI Copied",
+      description: "OOBI has been copied to clipboard",
     });
   };
 
@@ -482,10 +334,10 @@ const Issuer = () => {
               </div>
               <div>
                 <h1 className="text-2xl font-bold text-slate-900">
-                  Issuer Dashboard
+                  {accountType} Issuer Dashboard
                 </h1>
                 <p className="text-slate-600">
-                  Manage credential issuance and revocation
+                  Manage credential issuance and revocation as {accountType}
                 </p>
               </div>
             </div>
@@ -526,9 +378,9 @@ const Issuer = () => {
         ) : !isConnected ? (
           <Card className="max-w-2xl mx-auto">
             <CardHeader className="text-center">
-              <CardTitle>Initialize Issuer Client</CardTitle>
+              <CardTitle>Initialize {accountType} Issuer Client</CardTitle>
               <CardDescription>
-                Connect to the KERI network and set up your issuer identity
+                Connect to the KERI network and set up your {accountType} issuer identity
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -547,34 +399,20 @@ const Issuer = () => {
                 </div>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="alias">Issuer AID Alias</Label>
+                <Label htmlFor="alias">{accountType} AID Alias</Label>
                 <Input
                   id="alias"
-                  value={issuerData.alias}
+                  value={accountData.alias}
                   onChange={(e) =>
-                    setIssuerData({ ...issuerData, alias: e.target.value })
+                    setAccountData({ ...accountData, alias: e.target.value })
                   }
-                  placeholder="Enter issuer alias"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="registry">Registry Name</Label>
-                <Input
-                  id="registry"
-                  value={issuerData.registryName}
-                  onChange={(e) =>
-                    setIssuerData({
-                      ...issuerData,
-                      registryName: e.target.value,
-                    })
-                  }
-                  placeholder="Enter registry name"
+                  placeholder={`Enter ${accountType} alias`}
                 />
               </div>
               <PasscodeDialog
                 onPasscodeSubmit={handleConnect}
                 isProcessing={isProcessing}
-                entityType="issuer"
+                entityType={accountType}
               />
             </CardContent>
           </Card>
@@ -591,68 +429,105 @@ const Issuer = () => {
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <Plus className="h-5 w-5" />
-                    Issue New Credential
+                    Issue New Credential as {accountType}
                   </CardTitle>
                   <CardDescription>
-                    Create and issue an ACDC credential to a holder
+                    Create and issue an ACDC credential to a target entity
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  {/* VC Type Dropdown */}
+                  {/* Schema Selection */}
                   <div className="space-y-2">
-                    <Label htmlFor="vcType">VC Type</Label>
-                    <Select value={vcType} onValueChange={setVcType}>
-                      <SelectTrigger id="vcType">
-                        <SelectValue placeholder="Select VC Type" />
+                    <Label htmlFor="schema">Available Schemas for {accountType}</Label>
+                    <Select value={selectedSchema} onValueChange={setSelectedSchema}>
+                      <SelectTrigger id="schema">
+                        <SelectValue placeholder="Select schema to issue" />
                       </SelectTrigger>
                       <SelectContent>
-                        {VC_SCHEMAS.map((schema) => (
-                          <SelectItem key={schema.value} value={schema.value}>
-                            {schema.label}
+                        {availableSchemas.map((schema) => (
+                          <SelectItem key={schema.said} value={schema.said}>
+                            <div>
+                              <div className="font-medium">{schema.name}</div>
+                              <div className="text-xs text-slate-500">{schema.description}</div>
+                            </div>
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* Render dynamic fields for selected VC type */}
-                    {VC_SCHEMAS.find((s) => s.value === vcType)?.fields.map(
-                      (field) => (
-                        <div className="space-y-2" key={field.name}>
-                          <Label htmlFor={field.name}>{field.label}</Label>
-                          <Input
-                            id={field.name}
-                            type={field.type}
-                            value={credentialData[field.name] || ""}
-                            onChange={(e) =>
-                              setCredentialData({
-                                ...credentialData,
-                                [field.name]: e.target.value,
-                              })
-                            }
-                          />
-                        </div>
-                      )
+
+                  {/* Target Selection */}
+                  <div className="space-y-4">
+                    <Label>Target Entity OOBI</Label>
+                    
+                    {/* Preconfigured OOBIs */}
+                    {PRECONFIGURED_OOBIS[accountType].length > 0 && (
+                      <div className="space-y-2">
+                        <Label htmlFor="preconfiguredOOBI">Preconfigured Targets</Label>
+                        <Select value={selectedPreconfiguredOOBI} onValueChange={setSelectedPreconfiguredOOBI}>
+                          <SelectTrigger id="preconfiguredOOBI">
+                            <SelectValue placeholder="Select preconfigured target" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {PRECONFIGURED_OOBIS[accountType].map((oobi, index) => (
+                              <SelectItem key={index} value={oobi}>
+                                <div className="font-mono text-xs">
+                                  {oobi.substring(0, 60)}...
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
                     )}
+
+                    {/* Custom OOBI */}
                     <div className="space-y-2">
-                      <Label htmlFor="holderAID">Holder AID</Label>
+                      <Label htmlFor="customOOBI">Or Enter Custom Target OOBI</Label>
                       <Input
-                        id="holderAID"
-                        value={holderAid}
-                        onChange={(e) => setHolderAid(e.target.value)}
-                        placeholder="Enter holder's AID"
+                        id="customOOBI"
+                        value={customOOBI}
+                        onChange={(e) => setCustomOOBI(e.target.value)}
+                        placeholder="Enter target entity OOBI"
                       />
                     </div>
+
+                    {/* Final OOBI Display */}
+                    {targetOOBI && (
+                      <div className="space-y-2">
+                        <Label>Selected Target OOBI</Label>
+                        <div className="p-2 bg-gray-50 rounded text-xs font-mono break-all">
+                          {targetOOBI}
+                        </div>
+                      </div>
+                    )}
                   </div>
+
+                  {/* Credential Data */}
+                  <div className="space-y-2">
+                    <Label>Credential Data (JSON)</Label>
+                    <textarea
+                      className="w-full p-2 border rounded-md font-mono text-sm"
+                      rows={4}
+                      value={JSON.stringify(credentialData, null, 2)}
+                      onChange={(e) => {
+                        try {
+                          setCredentialData(JSON.parse(e.target.value));
+                        } catch {
+                          // Invalid JSON, keep current state
+                        }
+                      }}
+                      placeholder='{"attribute": "value"}'
+                    />
+                  </div>
+
                   <Button
                     onClick={handleIssueCredential}
-                    disabled={isProcessing || !holderAid}
+                    disabled={isProcessing || !targetOOBI || !selectedSchema}
                     className="w-full"
                   >
                     <Send className="h-4 w-4 mr-2" />
-                    {isProcessing
-                      ? "Issuing Credential..."
-                      : "Issue Credential"}
+                    {isProcessing ? "Issuing Credential..." : "Issue Credential"}
                   </Button>
                 </CardContent>
               </Card>
@@ -663,73 +538,40 @@ const Issuer = () => {
                 <CardHeader>
                   <CardTitle>Issued Credentials</CardTitle>
                   <CardDescription>
-                    View and manage all credentials issued by this AID
+                    View and manage all credentials issued by this {accountType} AID
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
-                    {credentials.map((credential) => (
-                      <div
-                        key={credential.id}
-                        className="border rounded-lg p-4 space-y-3"
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <div className="text-sm font-mono text-slate-600">
-                              {credential.said.substring(0, 20)}...
-                            </div>
-                            <Badge
-                              variant={
-                                credential.status === "issued"
-                                  ? "default"
-                                  : "destructive"
-                              }
-                            >
-                              {credential.status}
-                            </Badge>
-                          </div>
-                          {credential.status === "issued" && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() =>
-                                handleRevokeCredential(credential.id)
-                              }
-                              disabled={isProcessing}
-                            >
-                              <RotateCcw className="h-4 w-4 mr-2" />
-                              Revoke
-                            </Button>
-                          )}
-                        </div>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                          <div>
-                            <span className="text-slate-500">Event:</span>
-                            <div className="font-medium">
-                              {credential.claims.eventName}
-                            </div>
-                          </div>
-                          <div>
-                            <span className="text-slate-500">Access:</span>
-                            <div className="font-medium">
-                              {credential.claims.accessLevel}
-                            </div>
-                          </div>
-                          <div>
-                            <span className="text-slate-500">Valid Until:</span>
-                            <div className="font-medium">
-                              {credential.claims.validDate}
-                            </div>
-                          </div>
-                          <div>
-                            <span className="text-slate-500">Issued:</span>
-                            <div className="font-medium">
-                              {credential.issuedDate}
-                            </div>
-                          </div>
-                        </div>
+                    {credentials.length === 0 ? (
+                      <div className="text-center py-8 text-slate-500">
+                        No credentials issued yet
                       </div>
-                    ))}
+                    ) : (
+                      credentials.map((credential) => (
+                        <div
+                          key={credential.id}
+                          className="border rounded-lg p-4 space-y-3"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <div className="text-sm font-mono text-slate-600">
+                                {credential.said?.substring(0, 20)}...
+                              </div>
+                              <Badge
+                                variant={
+                                  credential.status === "issued"
+                                    ? "default"
+                                    : "destructive"
+                                }
+                              >
+                                {credential.status}
+                              </Badge>
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -738,9 +580,9 @@ const Issuer = () => {
             <TabsContent value="settings" className="space-y-6">
               <Card>
                 <CardHeader>
-                  <CardTitle>Issuer Configuration</CardTitle>
+                  <CardTitle>{accountType} Issuer Configuration</CardTitle>
                   <CardDescription>
-                    Manage your issuer settings and network configuration
+                    Manage your {accountType} issuer settings and network configuration
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -755,17 +597,37 @@ const Issuer = () => {
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <Label>AID Alias</Label>
-                    <Input value={issuerData.alias} readOnly />
+                    <Label>Account Type</Label>
+                    <Input value={accountType} readOnly />
                   </div>
                   <div className="space-y-2">
-                    <Label>Registry Name</Label>
-                    <Input value={issuerData.registryName} readOnly />
+                    <Label>AID Alias</Label>
+                    <Input value={accountData.alias} readOnly />
                   </div>
+                  
+                  {/* OOBI Display */}
+                  {accountData.oobi && (
+                    <div className="space-y-2">
+                      <Label>Your OOBI</Label>
+                      <div className="flex gap-2">
+                        <div className="flex-1 p-2 bg-gray-50 rounded text-xs font-mono break-all">
+                          {accountData.oobi}
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={copyOOBIToClipboard}
+                        >
+                          <Copy className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                  
                   <div className="flex items-center gap-2 p-4 bg-green-50 rounded-lg">
                     <CheckCircle className="h-5 w-5 text-green-600" />
                     <span className="text-green-700">
-                      Connected to KERI network
+                      Connected to KERI network as {accountType}
                     </span>
                   </div>
                 </CardContent>

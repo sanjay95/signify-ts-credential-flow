@@ -22,6 +22,7 @@ import {
   RotateCcw,
   RefreshCw,
   Clock,
+  Copy,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -42,7 +43,13 @@ import {
 } from "../utils/utils";
 import { getItem, setItem } from "@/utils/db";
 import { PasscodeDialog } from "@/components/PasscodeDialog";
-import { set } from "date-fns";
+
+interface VerifierConfig {
+  alias: string;
+  passcode: string;
+  aid: string;
+  oobi: string;
+}
 
 const Verifier = () => {
   const navigate = useNavigate();
@@ -54,11 +61,11 @@ const Verifier = () => {
   const [isCheckingIncoming, setIsCheckingIncoming] = useState(false);
   const [verifierClient, setVerifierClient] = useState(null);
 
-  const [verifierData, setVerifierData] = useState({
+  const [verifierData, setVerifierData] = useState<VerifierConfig>({
     alias: "verifierAid",
-    verifierAid: "",
-    verifierOOBI: "",
-    verifierBran: "",
+    passcode: "",
+    aid: "",
+    oobi: "",
   });
 
   const [requestData, setRequestData] = useState({
@@ -71,12 +78,12 @@ const Verifier = () => {
 
   useEffect(() => {
     const attemptReconnect = async () => {
-      const savedData = await getItem<any>("verifier-data");
+      const savedData = await getItem<VerifierConfig>("verifier-data");
       if (savedData) {
         setVerifierData(savedData);
-        if (savedData.verifierBran) {
+        if (savedData.passcode) {
           console.log("Attempting to reconnect with saved passcode...");
-          await handleConnect(savedData.verifierBran, true);
+          await handleConnect(savedData.passcode, true);
         }
       }
       setIsInitializing(false);
@@ -97,7 +104,7 @@ const Verifier = () => {
   }, [isConnected, verifierClient]);
 
   useEffect(() => {
-    if (verifierData.verifierBran) {
+    if (verifierData.passcode) {
       setItem("verifier-data", verifierData);
     }
   }, [verifierData]);
@@ -111,11 +118,9 @@ const Verifier = () => {
     }
 
     try {
-      const verifierBran = userPasscode;
-      const verifierAidAlias = verifierData.alias || "verifierAid";
       const { client: verifierClient, clientState: verifierClientState } =
         await initializeAndConnectClient(
-          verifierBran,
+          userPasscode,
           config.adminUrl,
           config.bootUrl
         );
@@ -125,38 +130,39 @@ const Verifier = () => {
       let verifierAid, verifierOOBI;
 
       try {
-        verifierAid = await verifierClient.identifiers().get(verifierAidAlias);
+        verifierAid = await verifierClient.identifiers().get(verifierData.alias);
         console.log("Existing Verifier AID found:", verifierAid);
 
         verifierOOBI = await generateOOBI(
           verifierClient,
-          verifierAidAlias,
+          verifierData.alias,
           ROLE_AGENT
         );
       } catch (error) {
         console.log("No existing Verifier AID found, creating new one...");
         const { aid: newVerifierAid } = await createNewAID(
           verifierClient,
-          verifierAidAlias,
+          verifierData.alias,
           DEFAULT_IDENTIFIER_ARGS
         );
         verifierAid = newVerifierAid;
         console.log("Verifier AID created:", verifierAid);
 
-        await addEndRoleForAID(verifierClient, verifierAidAlias, ROLE_AGENT);
+        await addEndRoleForAID(verifierClient, verifierData.alias, ROLE_AGENT);
         verifierOOBI = await generateOOBI(
           verifierClient,
-          verifierAidAlias,
+          verifierData.alias,
           ROLE_AGENT
         );
         console.log("Verifier OOBI generated:", verifierOOBI);
       }
+      
       setItem("verifier-oobi", verifierOOBI);
       setVerifierData((prevData) => ({
         ...prevData,
-        verifierBran: verifierBran,
-        verifierAid: verifierAid.prefix || verifierAid.d,
-        verifierOOBI: verifierOOBI,
+        passcode: userPasscode,
+        aid: verifierAid.prefix || verifierAid.d,
+        oobi: verifierOOBI,
       }));
 
       setIsConnected(true);
@@ -174,7 +180,7 @@ const Verifier = () => {
     } catch (error) {
       console.error("Error connecting verifier client:", error);
       if (isReconnect) {
-        setVerifierData((prev) => ({ ...prev, verifierBran: "" }));
+        setVerifierData((prev) => ({ ...prev, passcode: "" }));
       }
       toast({
         title: "Connection Error",
@@ -189,13 +195,25 @@ const Verifier = () => {
   const handleRequestCredential = async () => {
     setIsProcessing(true);
     try {
-      const holderOOBI = (await getItem("holder-oobi")) as string;
+      // Look for any available account OOBI
+      const accountTypes = ['gleif', 'qvi', 'le', 'le-oor'];
+      let holderOOBI = null;
+      
+      for (const accountType of accountTypes) {
+        const oobi = await getItem(`${accountType}-oobi`);
+        if (oobi) {
+          holderOOBI = oobi;
+          break;
+        }
+      }
+      
       if (!holderOOBI) {
         throw new Error(
-          "Holder OOBI not found. Please ensure the Holder has been created and connected first."
+          "No account OOBI found. Please ensure an account has been created and connected first."
         );
       }
-      await resolveOOBI(verifierClient, holderOOBI, "holderContact");
+      
+      await resolveOOBI(verifierClient, holderOOBI, "accountContact");
 
       const { applySaid } = await ipexApplyForCredential(
         verifierClient,
@@ -254,21 +272,20 @@ const Verifier = () => {
       );
 
       for (const notification of grantNotifications) {
-        // Retrieve the full IPEX grant exchange details.
-
         const grantExchange = await verifierClient
           .exchanges()
           .get(notification.a.d);
 
         const embeddedACDC = grantExchange.exn.e.acdc;
         console.log(embeddedACDC, "Embedded ACDC in grant exchange");
+        
         setVerifications((prev) => [
           ...prev,
           {
             id: notification.i,
-            applySaid: grantExchange.exn.a.p, // SAID of the original apply message
+            applySaid: grantExchange.exn.a.p,
             status: "received",
-            result: "valid", // Assuming we accept it for demo purposes
+            result: "valid",
             verifiedDate: new Date().toISOString(),
             claims: embeddedACDC.a,
             credentialSaid: embeddedACDC.d,
@@ -279,7 +296,7 @@ const Verifier = () => {
           "Updated verifications with received credential claims:",
           verifications
         );
-        // Verifier - Admit Grant
+        
         const admitResponse = await ipexAdmitGrant(
           verifierClient,
           verifierData.alias,
@@ -288,34 +305,13 @@ const Verifier = () => {
         );
         console.log("Verifier admitting credential");
 
-        // Verifier - Mark notification
         await markNotificationRead(verifierClient, notification.i);
         console.log("\n✅ Verifier marked notification read");
 
-        const applySaid = grantExchange.exn.a.p; // SAID of the original apply message
+        const applySaid = grantExchange.exn.a.p;
         const offeredAcdc = grantExchange.payload.acdc;
 
-        // // TODO: Full verification logic (check signatures, registry status, etc.)
-        // // For this demo, we'll just accept it and mark as verified.
-        // const isVerified = true; // Placeholder for actual verification result
-
-        // setVerifications((prev) =>
-        //   prev.map((v) =>
-        //     v.applySaid === applySaid
-        //       ? {
-        //           ...v,
-        //           status: "received",
-        //           result: isVerified ? "valid" : "invalid",
-        //           verifiedDate: new Date().toISOString(),
-        //           claims: offeredAcdc.a,
-        //           credentialSaid: offeredAcdc.d,
-        //         }
-        //       : v
-        //   )
-        // );
-        // console.log("verifierData", verifierData);
-
-        // await markNotificationRead(verifierClient, notification.i);
+        await markNotificationRead(verifierClient, notification.i);
         toast({
           title: "Presentation Received",
           description: `Credential received from ${offeredAcdc.i.substring(
@@ -329,6 +325,14 @@ const Verifier = () => {
     } finally {
       setIsCheckingIncoming(false);
     }
+  };
+
+  const copyOOBIToClipboard = () => {
+    navigator.clipboard.writeText(verifierData.oobi);
+    toast({
+      title: "OOBI Copied",
+      description: "Verifier OOBI has been copied to clipboard",
+    });
   };
 
   return (
@@ -475,14 +479,18 @@ const Verifier = () => {
                     <Label htmlFor="attributes">Required Attributes</Label>
                     <Input
                       id="attributes"
-                      value={requestData.attributes}
-                      onChange={(e) =>
-                        setRequestData({
-                          ...requestData,
-                          attributes: e.target.value,
-                        })
-                      }
-                      placeholder="e.g., eventName: GLEIF Summit"
+                      value={JSON.stringify(requestData.attributes)}
+                      onChange={(e) => {
+                        try {
+                          setRequestData({
+                            ...requestData,
+                            attributes: JSON.parse(e.target.value),
+                          });
+                        } catch {
+                          // Invalid JSON, keep current state
+                        }
+                      }}
+                      placeholder="e.g., {\"eventName\": \"GLEIF Summit\"}"
                     />
                   </div>
                   <Button
@@ -528,66 +536,56 @@ const Verifier = () => {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
-                    {verifications.map((verification) => (
-                      <div
-                        key={verification.id}
-                        className="border rounded-lg p-4 space-y-3"
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <div className="text-sm font-mono text-slate-600">
-                              {verification.credentialSaid.substring(0, 20)}...
-                            </div>
-                            <Badge
-                              variant={
-                                verification.result === "valid"
-                                  ? "default"
-                                  : verification.result === "invalid"
-                                  ? "destructive"
-                                  : "secondary"
-                              }
-                            >
-                              {verification.result}
-                            </Badge>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            {verification.result === "valid" ? (
-                              <Shield className="h-4 w-4 text-green-600" />
-                            ) : verification.result === "invalid" ? (
-                              <AlertCircle className="h-4 w-4 text-red-600" />
-                            ) : (
-                              <div className="h-4 w-4 bg-gray-400 rounded-full animate-pulse" />
-                            )}
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                          <div>
-                            <span className="text-slate-500">Event:</span>
-                            <div className="font-medium">
-                              {verification.claims.eventName}
-                            </div>
-                          </div>
-                          <div>
-                            <span className="text-slate-500">Access:</span>
-                            <div className="font-medium">
-                              {verification.claims.accessLevel}
-                            </div>
-                          </div>
-                          <div>
-                            <span className="text-slate-500">Valid Until:</span>
-                            <div className="font-medium">
-                              {verification.claims.validDate}
-                            </div>
-                          </div>
-                          <div>
-                            <span className="text-slate-500">Verified:</span>
-                            <div className="font-medium">
-                              {verification.verifiedDate}
-                            </div>
-                          </div>
-                        </div>
+                    {verifications.length === 0 ? (
+                      <div className="text-center py-8 text-slate-500">
+                        No verifications yet
                       </div>
-                    ))}
+                    ) : (
+                      verifications.map((verification) => (
+                        <div
+                          key={verification.id}
+                          className="border rounded-lg p-4 space-y-3"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <div className="text-sm font-mono text-slate-600">
+                                {verification.credentialSaid?.substring(0, 20)}...
+                              </div>
+                              <Badge
+                                variant={
+                                  verification.result === "valid"
+                                    ? "default"
+                                    : verification.result === "invalid"
+                                    ? "destructive"
+                                    : "secondary"
+                                }
+                              >
+                                {verification.result}
+                              </Badge>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {verification.result === "valid" ? (
+                                <Shield className="h-4 w-4 text-green-600" />
+                              ) : verification.result === "invalid" ? (
+                                <AlertCircle className="h-4 w-4 text-red-600" />
+                              ) : (
+                                <div className="h-4 w-4 bg-gray-400 rounded-full animate-pulse" />
+                              )}
+                            </div>
+                          </div>
+                          {verification.claims && (
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                              {Object.entries(verification.claims).map(([key, value]) => (
+                                <div key={key}>
+                                  <span className="text-slate-500 capitalize">{key}:</span>
+                                  <div className="font-medium">{String(value)}</div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      ))
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -616,6 +614,26 @@ const Verifier = () => {
                     <Label>AID Alias</Label>
                     <Input value={verifierData.alias} readOnly />
                   </div>
+                  
+                  {/* OOBI Display */}
+                  {verifierData.oobi && (
+                    <div className="space-y-2">
+                      <Label>Your OOBI</Label>
+                      <div className="flex gap-2">
+                        <div className="flex-1 p-2 bg-gray-50 rounded text-xs font-mono break-all">
+                          {verifierData.oobi}
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={copyOOBIToClipboard}
+                        >
+                          <Copy className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                  
                   <div className="flex items-center gap-2 p-4 bg-green-50 rounded-lg">
                     <CheckCircle className="h-5 w-5 text-green-600" />
                     <span className="text-green-700">

@@ -1,0 +1,90 @@
+
+export type AccountType = 'GLEIF' | 'QVI' | 'LE' | 'LE-OOR';
+
+export type Role = 'issuer' | 'holder' | 'verifier';
+
+export interface AccountConfig {
+  type: AccountType;
+  alias: string;
+  passcode: string;
+  aid: string;
+  oobi: string;
+  registrySaid?: string;
+}
+
+export const SCHEMAS = {
+  QVI: 'EBfdlu8R27Fbx-ehrqwImnK-8Cm79sqbAQ4MmvEAYqao',
+  LE: 'ENPXp1vQzRF6JwIuS-mp2U8Uf1MoADoP_GqQ62VsDZWY',
+  ECR_AUTH: 'EH6ekLjSr8V32WyFbGe1zXjTzFs9PkTYmupJ9H65O14g',
+  ECR: 'EEy9PkikFcANV1l7EHukCeXqrzT1hNZjGlUk7wuMO5jw',
+  OOR_AUTH: 'EKA57bKBKxr_kN7iN5i7lMUxpMG-s19dRcmov1iDxz-E',
+  OOR: 'EBNaNu-M9P5cgrnfl2Fvymy4E_jvxxyjb70PRtiANlJy'
+} as const;
+
+export interface SchemaOption {
+  name: string;
+  said: string;
+  description: string;
+  targetTypes: AccountType[];
+}
+
+export const SCHEMA_OPTIONS: SchemaOption[] = [
+  {
+    name: 'QVI Credential',
+    said: SCHEMAS.QVI,
+    description: 'Issued by GLEIF to a QVI, authorizing it to issue vLEI credentials',
+    targetTypes: ['QVI']
+  },
+  {
+    name: 'vLEI Credential',
+    said: SCHEMAS.LE,
+    description: 'Issued by a QVI to a Legal Entity, representing its digital identity',
+    targetTypes: ['LE']
+  },
+  {
+    name: 'OOR Auth Credential',
+    said: SCHEMAS.OOR_AUTH,
+    description: 'Authorization issued by a Legal Entity to a QVI for OOR credentials',
+    targetTypes: ['QVI']
+  },
+  {
+    name: 'OOR Credential',
+    said: SCHEMAS.OOR,
+    description: 'Issued to an individual in an official capacity (e.g., CEO)',
+    targetTypes: ['LE-OOR']
+  },
+  {
+    name: 'ECR Auth Credential',
+    said: SCHEMAS.ECR_AUTH,
+    description: 'Authorization issued by a Legal Entity for ECR credentials',
+    targetTypes: ['QVI']
+  },
+  {
+    name: 'ECR Credential',
+    said: SCHEMAS.ECR,
+    description: 'Issued to an individual for a specific business role',
+    targetTypes: ['LE-OOR']
+  }
+];
+
+export const getAvailableSchemas = (accountType: AccountType): SchemaOption[] => {
+  switch (accountType) {
+    case 'GLEIF':
+      return SCHEMA_OPTIONS.filter(s => s.name === 'QVI Credential');
+    case 'QVI':
+      return SCHEMA_OPTIONS.filter(s => s.name === 'vLEI Credential');
+    case 'LE':
+      return SCHEMA_OPTIONS.filter(s => s.name.includes('Auth'));
+    case 'LE-OOR':
+      return SCHEMA_OPTIONS.filter(s => s.name === 'OOR Credential' || s.name === 'ECR Credential');
+    default:
+      return [];
+  }
+};
+
+export const PRECONFIGURED_OOBIS: Record<AccountType, string[]> = {
+  'GLEIF': [],
+  'QVI': ['https://keria.testnet.gleif.org:3901/oobi/EDP1vHcw_wc4M__Fj53-cJaBnZZASd-aMTaSyWEQ-PC2'],
+  'LE': ['https://keria.testnet.gleif.org:3901/oobi/EDP1vHcw_wc4M__Fj53-cJaBnZZASd-aMTaSyWEQ-PC2'],
+  'LE-OOR': ['https://keria.testnet.gleif.org:3901/oobi/EDP1vHcw_wc4M__Fj53-cJaBnZZASd-aMTaSyWEQ-PC2']
+};

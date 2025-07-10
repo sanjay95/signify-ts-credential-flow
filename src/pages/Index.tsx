@@ -7,13 +7,18 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Shield,
   Users,
@@ -27,22 +32,48 @@ import {
 import { useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { useConfigContext } from "@/context/ConfigContext";
+import { AccountTypeSelector } from "@/components/AccountTypeSelector";
+import { AccountType } from "@/types/accounts";
 
 const Index = () => {
   const navigate = useNavigate();
   const [isConfigOpen, setIsConfigOpen] = useState(false);
   const [isConfigHovered, setIsConfigHovered] = useState(false);
-  // Collapse after 5s if not hovered
+  const [showAccountTypeDialog, setShowAccountTypeDialog] = useState(false);
+  const [selectedRole, setSelectedRole] = useState<'issuer' | 'holder' | null>(null);
+  const [selectedAccountType, setSelectedAccountType] = useState<AccountType | null>(null);
+
   useEffect(() => {
     if (isConfigOpen && !isConfigHovered) {
       const timer = setTimeout(() => setIsConfigOpen(false), 2000);
       return () => clearTimeout(timer);
     }
   }, [isConfigOpen, isConfigHovered]);
+
   const { config, env, setEnv } = useConfigContext();
 
-  const handleNavigate = (path: string) => {
-    navigate(path, { state: { config } });
+  const handleRoleSelection = (role: 'issuer' | 'holder') => {
+    setSelectedRole(role);
+    setShowAccountTypeDialog(true);
+  };
+
+  const handleAccountTypeSelection = (accountType: AccountType) => {
+    setSelectedAccountType(accountType);
+  };
+
+  const handleProceed = () => {
+    if (selectedRole && selectedAccountType) {
+      navigate(`/${selectedRole}`, { 
+        state: { 
+          config,
+          accountType: selectedAccountType 
+        } 
+      });
+    }
+  };
+
+  const handleVerifierNavigation = () => {
+    navigate('/verifier', { state: { config } });
   };
 
   const roles = [
@@ -58,7 +89,7 @@ const Index = () => {
         "Manage Revocation",
         "IPEX Grant Operations",
       ],
-      path: "/issuer",
+      action: () => handleRoleSelection('issuer'),
     },
     {
       id: "holder",
@@ -72,7 +103,7 @@ const Index = () => {
         "Present to Verifiers",
         "IPEX Apply/Offer",
       ],
-      path: "/holder",
+      action: () => handleRoleSelection('holder'),
     },
     {
       id: "verifier",
@@ -86,11 +117,10 @@ const Index = () => {
         "Check Revocation Status",
         "IPEX Admit",
       ],
-      path: "/verifier",
+      action: handleVerifierNavigation,
     },
   ];
 
-  // Color mapping for env
   const envColors: Record<string, string> = {
     local: "bg-green-100 text-green-800 border-green-400",
     test: "bg-yellow-100 text-yellow-800 border-yellow-400",
@@ -99,7 +129,6 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
-      {/* Header */}
       <div className="bg-white border-b border-slate-200 shadow-sm">
         <div className="container mx-auto px-6 py-8">
           <div className="flex items-center gap-4 mb-4">
@@ -133,9 +162,7 @@ const Index = () => {
         </div>
       </div>
 
-      {/* Main Content */}
       <div className="container mx-auto px-6 py-12">
-        {/* Network Environment Collapsible */}
         <div
           className="mb-8 max-w-md mx-auto"
           onMouseEnter={() => setIsConfigHovered(true)}
@@ -177,7 +204,7 @@ const Index = () => {
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="env">Environment</Label>
+                    <label htmlFor="env">Environment</label>
                     <select
                       id="env"
                       className="w-full p-2 border rounded-md"
@@ -253,7 +280,7 @@ const Index = () => {
                   </div>
 
                   <Button
-                    onClick={() => handleNavigate(role.path)}
+                    onClick={role.action}
                     className="w-full group-hover:bg-blue-600 transition-colors duration-300"
                   >
                     Enter as {role.title}
@@ -264,7 +291,43 @@ const Index = () => {
           })}
         </div>
 
-        {/* Info Section */}
+        <Dialog open={showAccountTypeDialog} onOpenChange={setShowAccountTypeDialog}>
+          <DialogContent className="max-w-4xl">
+            <DialogHeader>
+              <DialogTitle>
+                Select Account Type for {selectedRole?.charAt(0).toUpperCase()}{selectedRole?.slice(1)}
+              </DialogTitle>
+              <DialogDescription>
+                Choose the type of entity you represent to access the appropriate {selectedRole} interface
+              </DialogDescription>
+            </DialogHeader>
+            
+            <AccountTypeSelector
+              onSelect={handleAccountTypeSelection}
+              selectedType={selectedAccountType}
+            />
+            
+            <div className="flex justify-end gap-3 pt-4">
+              <Button 
+                variant="outline" 
+                onClick={() => {
+                  setShowAccountTypeDialog(false);
+                  setSelectedAccountType(null);
+                  setSelectedRole(null);
+                }}
+              >
+                Cancel
+              </Button>
+              <Button 
+                onClick={handleProceed}
+                disabled={!selectedAccountType}
+              >
+                Continue as {selectedAccountType} {selectedRole?.charAt(0).toUpperCase()}{selectedRole?.slice(1)}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
         <div className="mt-16 bg-white rounded-2xl border border-slate-200 p-8">
           <h3 className="text-xl font-bold text-slate-900 mb-4 text-center">
             About KERI Credential Management
