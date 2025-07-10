@@ -95,7 +95,7 @@ const Holder = () => {
 
   const [accountData, setAccountData] = useState<AccountConfig>({
     type: accountType,
-    alias: `${accountType.toLowerCase()}HolderAid`,
+    alias: `${accountType.toLowerCase()}Aid`,
     passcode: "",
     aid: "",
     oobi: "",
@@ -193,7 +193,7 @@ const Holder = () => {
       }
 
       // Store OOBI in IndexedDB for easy access
-      setItem(`${accountType.toLowerCase()}-holder-oobi`, oobi);
+      setItem(`${accountType.toLowerCase()}-oobi`, oobi);
 
       const updatedAccountData = {
         ...accountData,
@@ -237,7 +237,7 @@ const Holder = () => {
   // Add polling mechanism for incoming credentials
   useEffect(() => {
     let pollInterval: NodeJS.Timeout;
-    
+
     if (isConnected && holderClient && !isPolling) {
       setIsPolling(true);
       pollInterval = setInterval(async () => {
@@ -282,12 +282,12 @@ const Holder = () => {
   const handleCredentialGrant = async (notification: any) => {
     try {
       console.log("Admitting credential grant...");
-      
+
       const admitResponse = await ipexAdmitGrant(
         holderClient,
         accountData.alias,
         notification.a.i, // issuer AID
-        notification.a.d  // said
+        notification.a.d // said
       );
 
       console.log("Credential admitted:", admitResponse);
@@ -350,7 +350,7 @@ const Holder = () => {
       const applyResponse = await ipexApplyCredential(
         holderClient,
         accountData.alias,
-        targetOOBI.split('/').pop() || "", // Extract AID from OOBI
+        targetOOBI.split("/").pop() || "", // Extract AID from OOBI
         selectedSchema
       );
 
@@ -672,14 +672,14 @@ const Holder = () => {
                               <div className="text-sm font-mono text-slate-600">
                                 {credential.sad?.d?.substring(0, 20)}...
                               </div>
-                              <Badge variant="default">
-                                Valid
-                              </Badge>
+                              <Badge variant="default">Valid</Badge>
                             </div>
                           </div>
                           <div className="text-sm text-slate-600">
                             <div>Schema: {credential.schema}</div>
-                            <div>Issuer: {credential.sad?.i?.substring(0, 20)}...</div>
+                            <div>
+                              Issuer: {credential.sad?.i?.substring(0, 20)}...
+                            </div>
                           </div>
                         </div>
                       ))

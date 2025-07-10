@@ -60,7 +60,12 @@ import {
 } from "../utils/utils";
 import { getItem, setItem } from "@/utils/db";
 import { PasscodeDialog } from "@/components/PasscodeDialog";
-import { AccountType, AccountConfig, getAvailableSchemas, PRECONFIGURED_OOBIS } from "@/types/accounts";
+import {
+  AccountType,
+  AccountConfig,
+  getAvailableSchemas,
+  PRECONFIGURED_OOBIS,
+} from "@/types/accounts";
 import { FIXED_PASSCODES } from "@/config/environment";
 
 const Issuer = () => {
@@ -73,7 +78,7 @@ const Issuer = () => {
   const [issuerClient, setIssuerClient] = useState(null);
 
   // Get account type from navigation state
-  const accountType = location.state?.accountType as AccountType || 'GLEIF';
+  const accountType = (location.state?.accountType as AccountType) || "GLEIF";
   const [config, setConfig] = useState({
     adminUrl: "https://keria.testnet.gleif.org:3901",
     bootUrl: "https://keria.testnet.gleif.org:3903",
@@ -88,7 +93,10 @@ const Issuer = () => {
 
   const [accountData, setAccountData] = useState<AccountConfig>({
     type: accountType,
-    alias: `${accountType.toLowerCase()}Aid`,
+    alias:
+      accountType === "GLEIF"
+        ? `${accountType.toLowerCase()}`
+        : `${accountType.toLowerCase()}Aid`,
     passcode: "",
     aid: "",
     oobi: "",
@@ -101,11 +109,14 @@ const Issuer = () => {
 
   // Available schemas for this account type
   const availableSchemas = getAvailableSchemas(accountType);
-  const [selectedSchema, setSelectedSchema] = useState(availableSchemas[0]?.said || "");
-  
+  const [selectedSchema, setSelectedSchema] = useState(
+    availableSchemas[0]?.said || ""
+  );
+
   // Target selection
   const [targetOOBI, setTargetOOBI] = useState("");
-  const [selectedPreconfiguredOOBI, setSelectedPreconfiguredOOBI] = useState("");
+  const [selectedPreconfiguredOOBI, setSelectedPreconfiguredOOBI] =
+    useState("");
   const [customOOBI, setCustomOOBI] = useState("");
 
   // Dynamic credential data
@@ -113,7 +124,9 @@ const Issuer = () => {
 
   useEffect(() => {
     const attemptReconnect = async () => {
-      const savedData = await getItem<AccountConfig>(`${accountType.toLowerCase()}-data`);
+      const savedData = await getItem<AccountConfig>(
+        `${accountType.toLowerCase()}-data`
+      );
       if (savedData && savedData.type === accountType) {
         setAccountData(savedData);
         if (savedData.passcode) {
@@ -146,7 +159,7 @@ const Issuer = () => {
     } else {
       console.log(`Connecting ${accountType} Issuer...`);
     }
-    
+
     try {
       const { client: issuerClient, clientState: issuerClientState } =
         await initializeAndConnectClient(
@@ -163,7 +176,9 @@ const Issuer = () => {
         aid = await issuerClient.identifiers().get(accountData.alias);
         console.log(`Existing ${accountType} AID found:`, aid);
 
-        const registries = await issuerClient.registries().list(accountData.alias);
+        const registries = await issuerClient
+          .registries()
+          .list(accountData.alias);
         if (registries.length > 0) {
           registrySaid = registries[0].regk;
           console.log("Existing registry found:", registrySaid);
@@ -180,7 +195,9 @@ const Issuer = () => {
 
         oobi = await generateOOBI(issuerClient, accountData.alias, ROLE_AGENT);
       } catch (error) {
-        console.log(`No existing ${accountType} AID found, creating new one...`);
+        console.log(
+          `No existing ${accountType} AID found, creating new one...`
+        );
         const { aid: newAid } = await createNewAID(
           issuerClient,
           accountData.alias,
@@ -207,7 +224,7 @@ const Issuer = () => {
 
       // Store OOBI in IndexedDB for easy access
       setItem(`${accountType.toLowerCase()}-oobi`, oobi);
-      
+
       const updatedAccountData = {
         ...accountData,
         passcode: userPasscode,
@@ -215,9 +232,9 @@ const Issuer = () => {
         oobi: oobi,
         registrySaid: registrySaid,
       };
-      
+
       setAccountData(updatedAccountData);
-      
+
       // Persist to IndexedDB immediately
       await setItem(`${accountType.toLowerCase()}-data`, updatedAccountData);
 
@@ -248,47 +265,27 @@ const Issuer = () => {
     }
   };
 
-  // Add polling mechanism for issued credentials
   useEffect(() => {
-    let pollInterval: NodeJS.Timeout;
-    
-    if (isConnected && issuerClient && !isPolling) {
+    const loadIssuedCredentials = async () => {
+      if (!issuerClient) return;
       setIsPolling(true);
-      loadIssuedCredentials(); // Load immediately
-      
-      pollInterval = setInterval(async () => {
-        try {
-          await loadIssuedCredentials();
-        } catch (error) {
-          console.error("Error during polling:", error);
-        }
-      }, 10000); // Poll every 10 seconds
-    }
-
-    return () => {
-      if (pollInterval) {
-        clearInterval(pollInterval);
+      try {
+        const credList = await issuerClient.credentials().list();
+        console.log("Loaded issued credentials:", credList);
+        setCredentials(credList);
+      } catch (error) {
+        console.error("Error loading issued credentials:", error);
+      } finally {
+        setIsPolling(false);
       }
-      setIsPolling(false);
     };
-  }, [isConnected, issuerClient]);
-
-  const loadIssuedCredentials = async () => {
-    if (!issuerClient) return;
-
-    try {
-      const credList = await issuerClient.credentials().list();
-      console.log("Loaded issued credentials:", credList);
-      setCredentials(credList);
-    } catch (error) {
-      console.error("Error loading issued credentials:", error);
-    }
-  };
+    loadIssuedCredentials();
+  }, [isConnected, isNewCredential]);
 
   const handleIssueCredential = async () => {
     setIsProcessing(true);
     console.log("Issuing credential to target");
-    
+
     try {
       if (!targetOOBI) {
         toast({
@@ -313,25 +310,28 @@ const Issuer = () => {
         accountData.alias,
         accountData.registrySaid,
         selectedSchema,
-        targetOOBI.split('/').pop() || "", // Extract AID from OOBI
+        targetOOBI.split("/").pop() || "", // Extract AID from OOBI
         credentialData
       );
 
-      console.log("Credential issued with SAID:", credentialSaid.credentialSaid || credentialSaid);
-      
+      console.log(
+        "Credential issued with SAID:",
+        credentialSaid.credentialSaid || credentialSaid
+      );
+
       const credential = await issuerClient
         .credentials()
         .get(credentialSaid.credentialSaid || credentialSaid);
-      
+
       setNewCredential(true);
 
       console.log("Credential details:", credential);
       console.log("Granting credential to target");
-      
+
       const grantResponse = await ipexGrantCredential(
         issuerClient,
         accountData.alias,
-        targetOOBI.split('/').pop() || "",
+        targetOOBI.split("/").pop() || "",
         credential
       );
 
@@ -339,11 +339,9 @@ const Issuer = () => {
 
       toast({
         title: "Credential Issued",
-        description: "ACDC credential has been successfully created and granted to target",
+        description:
+          "ACDC credential has been successfully created and granted to target",
       });
-
-      // Refresh the credentials list
-      await loadIssuedCredentials();
     } catch (error) {
       console.error("Error issuing credential:", error);
       toast({
@@ -366,8 +364,38 @@ const Issuer = () => {
 
   // Check if this account type has a fixed passcode
   const hasFixedPasscode = accountType in FIXED_PASSCODES;
-  const fixedPasscode = hasFixedPasscode ? FIXED_PASSCODES[accountType as keyof typeof FIXED_PASSCODES] : undefined;
+  const fixedPasscode = hasFixedPasscode
+    ? FIXED_PASSCODES[accountType as keyof typeof FIXED_PASSCODES]
+    : undefined;
 
+  async function handleRevokeCredential(credentialSaid: any): Promise<void> {
+    if (!issuerClient || !credentialSaid) return;
+    setIsProcessing(true);
+    try {
+      console.log("Revoking credential:", credentialSaid);
+      const revokeResult = await issuerClient
+        .credentials()
+        .revoke(accountData.alias, credentialSaid);
+      const revokeOperation = revokeResult.op;
+      const revokeResponse = await issuerClient
+        .operations()
+        .wait(revokeOperation, AbortSignal.timeout(DEFAULT_TIMEOUT_MS));
+      toast({
+        title: "Credential Revoked",
+        description: "The credential has been successfully revoked.",
+      });
+      setNewCredential((prev) => !prev); // trigger reload
+    } catch (error) {
+      console.error("Error revoking credential:", error);
+      toast({
+        title: "Error",
+        description: "Failed to revoke credential.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsProcessing(false);
+    }
+  }
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-slate-50">
       {/* Header */}
@@ -435,10 +463,12 @@ const Issuer = () => {
             <CardHeader className="text-center">
               <CardTitle>Initialize {accountType} Issuer Client</CardTitle>
               <CardDescription>
-                Connect to the KERI network and set up your {accountType} issuer identity
+                Connect to the KERI network and set up your {accountType} issuer
+                identity
                 {hasFixedPasscode && (
                   <div className="mt-2 p-2 bg-blue-50 rounded text-sm">
-                    <strong>Note:</strong> This account type uses a predefined passcode
+                    <strong>Note:</strong> This account type uses a predefined
+                    passcode
                   </div>
                 )}
               </CardDescription>
@@ -481,7 +511,9 @@ const Issuer = () => {
                     disabled={isProcessing}
                     className="w-full"
                   >
-                    {isProcessing ? "Connecting..." : `Connect as ${accountType}`}
+                    {isProcessing
+                      ? "Connecting..."
+                      : `Connect as ${accountType}`}
                   </Button>
                 </div>
               ) : (
@@ -515,8 +547,13 @@ const Issuer = () => {
                 <CardContent className="space-y-4">
                   {/* Schema Selection */}
                   <div className="space-y-2">
-                    <Label htmlFor="schema">Available Schemas for {accountType}</Label>
-                    <Select value={selectedSchema} onValueChange={setSelectedSchema}>
+                    <Label htmlFor="schema">
+                      Available Schemas for {accountType}
+                    </Label>
+                    <Select
+                      value={selectedSchema}
+                      onValueChange={setSelectedSchema}
+                    >
                       <SelectTrigger id="schema">
                         <SelectValue placeholder="Select schema to issue" />
                       </SelectTrigger>
@@ -525,7 +562,9 @@ const Issuer = () => {
                           <SelectItem key={schema.said} value={schema.said}>
                             <div>
                               <div className="font-medium">{schema.name}</div>
-                              <div className="text-xs text-slate-500">{schema.description}</div>
+                              <div className="text-xs text-slate-500">
+                                {schema.description}
+                              </div>
                             </div>
                           </SelectItem>
                         ))}
@@ -536,23 +575,30 @@ const Issuer = () => {
                   {/* Target Selection */}
                   <div className="space-y-4">
                     <Label>Target Entity OOBI</Label>
-                    
+
                     {/* Preconfigured OOBIs */}
                     {PRECONFIGURED_OOBIS[accountType].length > 0 && (
                       <div className="space-y-2">
-                        <Label htmlFor="preconfiguredOOBI">Preconfigured Targets</Label>
-                        <Select value={selectedPreconfiguredOOBI} onValueChange={setSelectedPreconfiguredOOBI}>
+                        <Label htmlFor="preconfiguredOOBI">
+                          Preconfigured Targets
+                        </Label>
+                        <Select
+                          value={selectedPreconfiguredOOBI}
+                          onValueChange={setSelectedPreconfiguredOOBI}
+                        >
                           <SelectTrigger id="preconfiguredOOBI">
                             <SelectValue placeholder="Select preconfigured target" />
                           </SelectTrigger>
                           <SelectContent>
-                            {PRECONFIGURED_OOBIS[accountType].map((oobi, index) => (
-                              <SelectItem key={index} value={oobi}>
-                                <div className="font-mono text-xs">
-                                  {oobi.substring(0, 60)}...
-                                </div>
-                              </SelectItem>
-                            ))}
+                            {PRECONFIGURED_OOBIS[accountType].map(
+                              (oobi, index) => (
+                                <SelectItem key={index} value={oobi}>
+                                  <div className="font-mono text-xs">
+                                    {oobi.substring(0, 60)}...
+                                  </div>
+                                </SelectItem>
+                              )
+                            )}
                           </SelectContent>
                         </Select>
                       </div>
@@ -560,7 +606,9 @@ const Issuer = () => {
 
                     {/* Custom OOBI */}
                     <div className="space-y-2">
-                      <Label htmlFor="customOOBI">Or Enter Custom Target OOBI</Label>
+                      <Label htmlFor="customOOBI">
+                        Or Enter Custom Target OOBI
+                      </Label>
                       <Input
                         id="customOOBI"
                         value={customOOBI}
@@ -604,7 +652,9 @@ const Issuer = () => {
                     className="w-full"
                   >
                     <Send className="h-4 w-4 mr-2" />
-                    {isProcessing ? "Issuing Credential..." : "Issue Credential"}
+                    {isProcessing
+                      ? "Issuing Credential..."
+                      : "Issue Credential"}
                   </Button>
                 </CardContent>
               </Card>
@@ -624,7 +674,8 @@ const Issuer = () => {
                     )}
                   </CardTitle>
                   <CardDescription>
-                    View and manage all credentials issued by this {accountType} AID
+                    View and manage all credentials issued by this {accountType}{" "}
+                    AID
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -647,17 +698,47 @@ const Issuer = () => {
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-3">
                               <div className="text-sm font-mono text-slate-600">
-                                {credential.sad?.d?.substring(0, 20)}...
+                                Credential SAID: {credential.sad?.d || ""}
                               </div>
-                              <Badge variant="default">
-                                Issued
+                              <Badge
+                                variant="default"
+                                style={{
+                                  textTransform: "capitalize",
+                                  marginLeft: "0.5rem",
+                                }}
+                              >
+                                {credential.status.et === "iss"
+                                  ? "Issued"
+                                  : "Revoked"}
                               </Badge>
+                              {credential.status.et === "iss" && (
+                                <Badge
+                                  variant="destructive"
+                                  style={{
+                                    textTransform: "capitalize",
+                                    marginLeft: "0.5rem",
+                                  }}
+                                  onClick={() => {
+                                    if (accountType === "GLEIF") {
+                                      alert(
+                                        "GLEIF credentials should not be revoked directly. It might be in use by other as GLEIF is root for all test apps."
+                                      );
+                                      return;
+                                    }
+                                    handleRevokeCredential(credential.sad?.d);
+                                  }}
+                                >
+                                  Revoke
+                                </Badge>
+                              )}
                             </div>
                           </div>
                           <div className="text-sm text-slate-600">
-                            <div>Schema: {credential.schema}</div>
-                            <div>Subject: {credential.sad?.a?.i?.substring(0, 20)}...</div>
-                            <div>Registry: {credential.status?.s}</div>
+                            <div>
+                              VC date:{" "}
+                              {new Date(credential.status.dt).toLocaleString()}
+                            </div>
+                            <div>Issued to: {credential.sad?.a?.i}</div>
                           </div>
                         </div>
                       ))
@@ -672,7 +753,8 @@ const Issuer = () => {
                 <CardHeader>
                   <CardTitle>{accountType} Issuer Configuration</CardTitle>
                   <CardDescription>
-                    Manage your {accountType} issuer settings and network configuration
+                    Manage your {accountType} issuer settings and network
+                    configuration
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -694,7 +776,7 @@ const Issuer = () => {
                     <Label>AID Alias</Label>
                     <Input value={accountData.alias} readOnly />
                   </div>
-                  
+
                   {/* OOBI Display */}
                   {accountData.oobi && (
                     <div className="space-y-2">
@@ -713,7 +795,7 @@ const Issuer = () => {
                       </div>
                     </div>
                   )}
-                  
+
                   <div className="flex items-center gap-2 p-4 bg-green-50 rounded-lg">
                     <CheckCircle className="h-5 w-5 text-green-600" />
                     <span className="text-green-700">
