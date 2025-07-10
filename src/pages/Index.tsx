@@ -25,12 +25,20 @@ import {
   ChevronDown,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useConfigContext } from "@/context/ConfigContext";
 
 const Index = () => {
   const navigate = useNavigate();
   const [isConfigOpen, setIsConfigOpen] = useState(false);
+  const [isConfigHovered, setIsConfigHovered] = useState(false);
+  // Collapse after 5s if not hovered
+  useEffect(() => {
+    if (isConfigOpen && !isConfigHovered) {
+      const timer = setTimeout(() => setIsConfigOpen(false), 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [isConfigOpen, isConfigHovered]);
   const { config, env, setEnv } = useConfigContext();
 
   const handleNavigate = (path: string) => {
@@ -82,6 +90,13 @@ const Index = () => {
     },
   ];
 
+  // Color mapping for env
+  const envColors: Record<string, string> = {
+    local: "bg-green-100 text-green-800 border-green-400",
+    test: "bg-yellow-100 text-yellow-800 border-yellow-400",
+    prod: "bg-gray-200 text-gray-800 border-gray-400",
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
       {/* Header */}
@@ -120,42 +135,75 @@ const Index = () => {
 
       {/* Main Content */}
       <div className="container mx-auto px-6 py-12">
-        {/* Network Environment Dropdown */}
-        <div className="mb-8 max-w-md mx-auto">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Network Environment</CardTitle>
-              <CardDescription>
-                Choose which network to use for all client connections
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="env">Environment</Label>
-                <select
-                  id="env"
-                  className="w-full p-2 border rounded-md"
-                  value={env}
-                  onChange={(e) => setEnv(e.target.value as any)}
+        {/* Network Environment Collapsible */}
+        <div
+          className="mb-8 max-w-md mx-auto"
+          onMouseEnter={() => setIsConfigHovered(true)}
+          onMouseLeave={() => setIsConfigHovered(false)}
+        >
+          <Collapsible open={isConfigOpen} onOpenChange={setIsConfigOpen}>
+            <CollapsibleTrigger asChild>
+              <Button
+                variant="outline"
+                className="w-full max-w-md mx-auto flex items-center justify-between border"
+              >
+                <div className="flex items-center gap-2">
+                  <Settings className="h-4 w-4" />
+                  Network Environment
+                </div>
+                <span
+                  className={`ml-2 px-3 py-1 rounded-full border text-xs font-semibold ${envColors[env]}`}
                 >
-                  <option value="local">Local</option>
-                  <option value="test">Test</option>
-                  <option value="prod">Production</option>
-                </select>
-              </div>
-              <div className="flex flex-col gap-1 text-xs text-slate-600">
-                <div>
-                  <b>Admin URL:</b> {config.adminUrl}
-                </div>
-                <div>
-                  <b>Boot URL:</b> {config.bootUrl}
-                </div>
-                <div>
-                  <b>Schema Server:</b> {config.schemaServer}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+                  {env === "local"
+                    ? "Local"
+                    : env === "test"
+                    ? "Test"
+                    : "Production"}
+                </span>
+                <ChevronDown
+                  className={`h-4 w-4 transition-transform ${
+                    isConfigOpen ? "rotate-180" : ""
+                  }`}
+                />
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="mt-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg">Network Environment</CardTitle>
+                  <CardDescription>
+                    Choose which network to use for all client connections
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="env">Environment</Label>
+                    <select
+                      id="env"
+                      className="w-full p-2 border rounded-md"
+                      value={env}
+                      onChange={(e) => setEnv(e.target.value as any)}
+                    >
+                      <option value="local">Local</option>
+                      <option value="test">Test</option>
+                      <option value="prod">Production</option>
+                    </select>
+                  </div>
+                  <div className="flex flex-col gap-1 text-xs text-slate-600">
+                    <div>
+                      <b>Admin URL:</b> {config.adminUrl}
+                    </div>
+                    <div>
+                      <b>Boot URL:</b> {config.bootUrl}
+                    </div>
+                    <div>
+                      <b>Schema Server:</b> {config.schemaServer}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </CollapsibleContent>
+          </Collapsible>
         </div>
 
         <div className="text-center mb-12">

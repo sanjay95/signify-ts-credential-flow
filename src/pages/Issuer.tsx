@@ -207,7 +207,6 @@ const Issuer = () => {
     } else {
       console.log("Connecting Issuer...");
     }
-
     try {
       const issuerBran = userPasscode;
       const issuerAidAlias = issuerData.alias || "issuerAid";
