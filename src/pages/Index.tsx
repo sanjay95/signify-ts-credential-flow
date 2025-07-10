@@ -26,15 +26,12 @@ import {
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useState } from "react";
+import { useConfigContext } from "@/context/ConfigContext";
 
 const Index = () => {
   const navigate = useNavigate();
   const [isConfigOpen, setIsConfigOpen] = useState(false);
-  const [config, setConfig] = useState({
-    adminUrl: "https://keria.testnet.gleif.org:3901",
-    bootUrl: "https://keria.testnet.gleif.org:3903",
-    schemaServer: "https://schema.testnet.gleif.org:7723",
-  });
+  const { config, env, setEnv } = useConfigContext();
 
   const handleNavigate = (path: string) => {
     navigate(path, { state: { config } });
@@ -123,79 +120,42 @@ const Index = () => {
 
       {/* Main Content */}
       <div className="container mx-auto px-6 py-12">
-        {/* Configuration Section */}
-        <div className="mb-8">
-          <Collapsible open={isConfigOpen} onOpenChange={setIsConfigOpen}>
-            <CollapsibleTrigger asChild>
-              <Button
-                variant="outline"
-                className="w-full max-w-md mx-auto flex items-center justify-between"
-              >
-                <div className="flex items-center gap-2">
-                  <Settings className="h-4 w-4" />
-                  Network Configuration
+        {/* Network Environment Dropdown */}
+        <div className="mb-8 max-w-md mx-auto">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Network Environment</CardTitle>
+              <CardDescription>
+                Choose which network to use for all client connections
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="env">Environment</Label>
+                <select
+                  id="env"
+                  className="w-full p-2 border rounded-md"
+                  value={env}
+                  onChange={(e) => setEnv(e.target.value as any)}
+                >
+                  <option value="local">Local</option>
+                  <option value="test">Test</option>
+                  <option value="prod">Production</option>
+                </select>
+              </div>
+              <div className="flex flex-col gap-1 text-xs text-slate-600">
+                <div>
+                  <b>Admin URL:</b> {config.adminUrl}
                 </div>
-                <ChevronDown
-                  className={`h-4 w-4 transition-transform ${
-                    isConfigOpen ? "rotate-180" : ""
-                  }`}
-                />
-              </Button>
-            </CollapsibleTrigger>
-            <CollapsibleContent className="mt-4">
-              <Card className="max-w-md mx-auto">
-                <CardHeader>
-                  <CardTitle className="text-lg">
-                    KERI Network Settings
-                  </CardTitle>
-                  <CardDescription>
-                    Configure the Admin and Boot URLs for all client connections
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="adminUrl">Admin URL</Label>
-                    <Input
-                      id="adminUrl"
-                      value={config.adminUrl}
-                      onChange={(e) =>
-                        setConfig({ ...config, adminUrl: e.target.value })
-                      }
-                      placeholder="https://keria.testnet.gleif.org:3901"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="bootUrl">Boot URL</Label>
-                    <Input
-                      id="bootUrl"
-                      value={config.bootUrl}
-                      onChange={(e) =>
-                        setConfig({ ...config, bootUrl: e.target.value })
-                      }
-                      placeholder="https://keria.testnet.gleif.org:3903"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="schemaSerevr">Schema Server URL</Label>
-                    <Input
-                      id="schemaSerevr"
-                      value={config.schemaServer}
-                      onChange={(e) =>
-                        setConfig({ ...config, schemaServer: e.target.value })
-                      }
-                      placeholder="https://schema.testnet.gleif.org:7723"
-                    />
-                  </div>
-                  <div className="flex items-center gap-2 p-3 bg-blue-50 rounded-lg">
-                    <Globe className="h-4 w-4 text-blue-600" />
-                    <span className="text-sm text-blue-700">
-                      These settings will be used by all client types
-                    </span>
-                  </div>
-                </CardContent>
-              </Card>
-            </CollapsibleContent>
-          </Collapsible>
+                <div>
+                  <b>Boot URL:</b> {config.bootUrl}
+                </div>
+                <div>
+                  <b>Schema Server:</b> {config.schemaServer}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
         <div className="text-center mb-12">

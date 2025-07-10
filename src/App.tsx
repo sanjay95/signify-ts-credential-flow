@@ -1,4 +1,3 @@
-
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -9,6 +8,7 @@ import Issuer from "./pages/Issuer";
 import Holder from "./pages/Holder";
 import Verifier from "./pages/Verifier";
 import NotFound from "./pages/NotFound";
+import { ConfigProvider } from "./context/ConfigContext";
 
 const queryClient = new QueryClient();
 
@@ -17,16 +17,18 @@ const App = () => (
     <TooltipProvider>
       <Toaster />
       <Sonner />
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Index />} />
-          <Route path="/issuer" element={<Issuer />} />
-          <Route path="/holder" element={<Holder />} />
-          <Route path="/verifier" element={<Verifier />} />
-          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </BrowserRouter>
+      <ConfigProvider>
+        <BrowserRouter>
+          <Routes>
+            <Route path="/" element={<Index />} />
+            <Route path="/issuer" element={<Issuer />} />
+            <Route path="/holder" element={<Holder />} />
+            <Route path="/verifier" element={<Verifier />} />
+            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </BrowserRouter>
+      </ConfigProvider>
     </TooltipProvider>
   </QueryClientProvider>
 );
