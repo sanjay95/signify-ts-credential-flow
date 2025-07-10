@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useConfig } from "@/hooks/useConfig";
@@ -490,7 +491,7 @@ const Verifier = () => {
                           // Invalid JSON, keep current state
                         }
                       }}
-                      placeholder="e.g., {\"eventName\": \"GLEIF Summit\"}"
+                      placeholder='e.g., {"eventName": "GLEIF Summit"}'
                     />
                   </div>
                   <Button
