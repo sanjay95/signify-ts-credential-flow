@@ -145,7 +145,7 @@ const Holder = () => {
             issuer: cred.sad.i,
             receivedDate: cred.sad.a.dt,
             claims: {
-              eventName: cred.sad.a.eventName,
+              eventName: cred.sad.a.eventName || cred.sad.a.LEI,
               accessLevel: cred.sad.a.accessLevel,
               validDate: cred.sad.a.validDate,
             },
@@ -753,7 +753,9 @@ const Holder = () => {
                       <option value="">Choose a credential...</option>
                       {credentials.map((cred) => (
                         <option key={cred.id} value={cred.id}>
-                          {cred.claims.eventName} - {cred.claims.accessLevel}
+                          {(cred.claims?.eventName || cred.id) +
+                            " - " +
+                            (cred.claims?.accessLevel || cred.receivedDate)}
                         </option>
                       ))}
                     </select>
