@@ -56,7 +56,10 @@ import {
 import { getItem, setItem } from "@/utils/db";
 import { PasscodeDialog } from "@/components/PasscodeDialog";
 
+import { useSearchParams } from "react-router-dom";
+
 const Holder = () => {
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { config } = useConfig();
   const { toast } = useToast();
@@ -155,10 +158,22 @@ const Holder = () => {
 
   const [credentials, setCredentials] = useState([]);
 
+  // Determine if we should default to present tab and prefill verifierOOBI
+  const [defaultTab, setDefaultTab] = useState("credentials");
   const [presentationData, setPresentationData] = useState({
     verifierOOBI: "",
     selectedCredential: "",
   });
+
+  // On mount, check for verifiersOOBI in query params
+  useEffect(() => {
+    const oobi =
+      searchParams.get("verifiersOOBI") || searchParams.get("verifierOOBI");
+    if (oobi) {
+      setDefaultTab("present");
+      setPresentationData((prev) => ({ ...prev, verifierOOBI: oobi }));
+    }
+  }, [searchParams]);
 
   const handleConnect = async (userPasscode: string, isReconnect = false) => {
     setIsProcessing(true);
@@ -530,7 +545,7 @@ const Holder = () => {
             </CardContent>
           </Card>
         ) : (
-          <Tabs defaultValue="credentials" className="space-y-6">
+          <Tabs defaultValue={defaultTab} className="space-y-6">
             <TabsList className="grid w-full grid-cols-3">
               <TabsTrigger value="credentials">My Credentials</TabsTrigger>
               <TabsTrigger value="present">Present Credential</TabsTrigger>
