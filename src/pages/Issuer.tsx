@@ -97,6 +97,7 @@ const Issuer = () => {
 
   const [credentials, setCredentials] = useState([]);
   const [isNewCredential, setNewCredential] = useState(false);
+  const [isPolling, setIsPolling] = useState(false);
 
   // Available schemas for this account type
   const availableSchemas = getAvailableSchemas(accountType);
@@ -247,6 +248,43 @@ const Issuer = () => {
     }
   };
 
+  // Add polling mechanism for issued credentials
+  useEffect(() => {
+    let pollInterval: NodeJS.Timeout;
+    
+    if (isConnected && issuerClient && !isPolling) {
+      setIsPolling(true);
+      loadIssuedCredentials(); // Load immediately
+      
+      pollInterval = setInterval(async () => {
+        try {
+          await loadIssuedCredentials();
+        } catch (error) {
+          console.error("Error during polling:", error);
+        }
+      }, 10000); // Poll every 10 seconds
+    }
+
+    return () => {
+      if (pollInterval) {
+        clearInterval(pollInterval);
+      }
+      setIsPolling(false);
+    };
+  }, [isConnected, issuerClient]);
+
+  const loadIssuedCredentials = async () => {
+    if (!issuerClient) return;
+
+    try {
+      const credList = await issuerClient.credentials().list();
+      console.log("Loaded issued credentials:", credList);
+      setCredentials(credList);
+    } catch (error) {
+      console.error("Error loading issued credentials:", error);
+    }
+  };
+
   const handleIssueCredential = async () => {
     setIsProcessing(true);
     console.log("Issuing credential to target");
@@ -303,6 +341,9 @@ const Issuer = () => {
         title: "Credential Issued",
         description: "ACDC credential has been successfully created and granted to target",
       });
+
+      // Refresh the credentials list
+      await loadIssuedCredentials();
     } catch (error) {
       console.error("Error issuing credential:", error);
       toast({
@@ -572,7 +613,16 @@ const Issuer = () => {
             <TabsContent value="manage" className="space-y-6">
               <Card>
                 <CardHeader>
-                  <CardTitle>Issued Credentials</CardTitle>
+                  <CardTitle className="flex items-center gap-2">
+                    <Building className="h-5 w-5" />
+                    Issued Credentials
+                    {isPolling && (
+                      <div className="flex items-center gap-2 text-sm text-blue-600">
+                        <RotateCcw className="h-4 w-4 animate-spin" />
+                        Monitoring...
+                      </div>
+                    )}
+                  </CardTitle>
                   <CardDescription>
                     View and manage all credentials issued by this {accountType} AID
                   </CardDescription>
@@ -582,28 +632,32 @@ const Issuer = () => {
                     {credentials.length === 0 ? (
                       <div className="text-center py-8 text-slate-500">
                         No credentials issued yet
+                        {isPolling && (
+                          <div className="mt-2 text-sm">
+                            Monitoring for new credentials...
+                          </div>
+                        )}
                       </div>
                     ) : (
-                      credentials.map((credential) => (
+                      credentials.map((credential: any, index: number) => (
                         <div
-                          key={credential.id}
+                          key={credential.sad?.d || index}
                           className="border rounded-lg p-4 space-y-3"
                         >
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-3">
                               <div className="text-sm font-mono text-slate-600">
-                                {credential.said?.substring(0, 20)}...
+                                {credential.sad?.d?.substring(0, 20)}...
                               </div>
-                              <Badge
-                                variant={
-                                  credential.status === "issued"
-                                    ? "default"
-                                    : "destructive"
-                                }
-                              >
-                                {credential.status}
+                              <Badge variant="default">
+                                Issued
                               </Badge>
                             </div>
+                          </div>
+                          <div className="text-sm text-slate-600">
+                            <div>Schema: {credential.schema}</div>
+                            <div>Subject: {credential.sad?.a?.i?.substring(0, 20)}...</div>
+                            <div>Registry: {credential.status?.s}</div>
                           </div>
                         </div>
                       ))

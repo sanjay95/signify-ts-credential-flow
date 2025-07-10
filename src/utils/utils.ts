@@ -1204,3 +1204,44 @@ export async function test() {
     console.error("\n--- An error occurred in the main example: ---", error);
   }
 }
+
+export const ipexApplyCredential = async (
+  client: any,
+  holderAlias: string,
+  issuerAID: string,
+  schemaId: string
+) => {
+  console.log("Applying for credential...");
+  
+  const timestamp = createTimestamp();
+  
+  const applyData = {
+    't': 'exn',
+    'd': '',
+    'i': '',
+    'p': '',
+    'dt': timestamp,
+    'r': IPEX_APPLY_ROUTE,
+    'q': {},
+    'a': {
+      's': schemaId,
+      'i': issuerAID
+    }
+  };
+
+  const signer = client.manager.get(holderAlias);
+  const serder = new Serder(applyData);
+  const sig = signer.sign(serder.raw);
+  
+  const op = await client.exchanges().send(
+    holderAlias,
+    "multisig",
+    issuerAID,
+    applyData,
+    sig,
+    {}
+  );
+  
+  console.log("Credential application sent:", op);
+  return op;
+};

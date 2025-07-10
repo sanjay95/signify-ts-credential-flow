@@ -104,6 +104,7 @@ const Holder = () => {
 
   const [credentials, setCredentials] = useState([]);
   const [notifications, setNotifications] = useState([]);
+  const [isPolling, setIsPolling] = useState(false);
 
   // Target selection for credential requests
   const [targetOOBI, setTargetOOBI] = useState("");
@@ -233,6 +234,96 @@ const Holder = () => {
     }
   };
 
+  // Add polling mechanism for incoming credentials
+  useEffect(() => {
+    let pollInterval: NodeJS.Timeout;
+    
+    if (isConnected && holderClient && !isPolling) {
+      setIsPolling(true);
+      pollInterval = setInterval(async () => {
+        try {
+          await checkForIncomingCredentials();
+        } catch (error) {
+          console.error("Error during polling:", error);
+        }
+      }, 5000); // Poll every 5 seconds
+    }
+
+    return () => {
+      if (pollInterval) {
+        clearInterval(pollInterval);
+      }
+      setIsPolling(false);
+    };
+  }, [isConnected, holderClient]);
+
+  const checkForIncomingCredentials = async () => {
+    if (!holderClient) return;
+
+    try {
+      // Check for new notifications
+      const notifications = await holderClient.notifications().list();
+      const unreadNotifications = notifications.filter((n: any) => !n.r);
+
+      for (const notification of unreadNotifications) {
+        if (notification.a && notification.a.r === IPEX_GRANT_ROUTE) {
+          console.log("Received credential grant:", notification);
+          await handleCredentialGrant(notification);
+        }
+      }
+
+      // Refresh credentials list
+      await loadCredentials();
+    } catch (error) {
+      console.error("Error checking for credentials:", error);
+    }
+  };
+
+  const handleCredentialGrant = async (notification: any) => {
+    try {
+      console.log("Admitting credential grant...");
+      
+      const admitResponse = await ipexAdmitGrant(
+        holderClient,
+        accountData.alias,
+        notification.a.i, // issuer AID
+        notification.a.d  // said
+      );
+
+      console.log("Credential admitted:", admitResponse);
+
+      // Mark notification as read
+      await markNotificationRead(holderClient, notification.i);
+
+      toast({
+        title: "Credential Received",
+        description: "A new credential has been added to your wallet",
+      });
+
+      // Refresh credentials
+      await loadCredentials();
+    } catch (error) {
+      console.error("Error admitting credential:", error);
+      toast({
+        title: "Error",
+        description: "Failed to admit credential",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const loadCredentials = async () => {
+    if (!holderClient) return;
+
+    try {
+      const credList = await holderClient.credentials().list();
+      console.log("Loaded credentials:", credList);
+      setCredentials(credList);
+    } catch (error) {
+      console.error("Error loading credentials:", error);
+    }
+  };
+
   const handleRequestCredential = async () => {
     setIsProcessing(true);
     console.log("Requesting credential from issuer");
@@ -256,12 +347,12 @@ const Holder = () => {
 
       console.log("Schema resolved from OOBI:", schemaOOBI);
 
-      // const applyResponse = await ipexApplyCredential(
-      //   holderClient,
-      //   accountData.alias,
-      //   targetOOBI.split('/').pop() || "", // Extract AID from OOBI
-      //   selectedSchema
-      // );
+      const applyResponse = await ipexApplyCredential(
+        holderClient,
+        accountData.alias,
+        targetOOBI.split('/').pop() || "", // Extract AID from OOBI
+        selectedSchema
+      );
 
       console.log(`${accountType} holder applied for credential.`);
 
@@ -548,6 +639,12 @@ const Holder = () => {
                   <CardTitle className="flex items-center gap-2">
                     <Wallet className="h-5 w-5" />
                     My Credentials
+                    {isPolling && (
+                      <div className="flex items-center gap-2 text-sm text-green-600">
+                        <RotateCcw className="h-4 w-4 animate-spin" />
+                        Listening for credentials...
+                      </div>
+                    )}
                   </CardTitle>
                   <CardDescription>
                     View and manage all credentials in your {accountType} wallet
@@ -558,28 +655,31 @@ const Holder = () => {
                     {credentials.length === 0 ? (
                       <div className="text-center py-8 text-slate-500">
                         No credentials in wallet yet
+                        {isPolling && (
+                          <div className="mt-2 text-sm">
+                            Waiting for incoming credentials...
+                          </div>
+                        )}
                       </div>
                     ) : (
-                      credentials.map((credential) => (
+                      credentials.map((credential: any, index: number) => (
                         <div
-                          key={credential.id}
+                          key={credential.sad?.d || index}
                           className="border rounded-lg p-4 space-y-3"
                         >
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-3">
                               <div className="text-sm font-mono text-slate-600">
-                                {credential.said?.substring(0, 20)}...
+                                {credential.sad?.d?.substring(0, 20)}...
                               </div>
-                              <Badge
-                                variant={
-                                  credential.status === "valid"
-                                    ? "default"
-                                    : "destructive"
-                                }
-                              >
-                                {credential.status}
+                              <Badge variant="default">
+                                Valid
                               </Badge>
                             </div>
+                          </div>
+                          <div className="text-sm text-slate-600">
+                            <div>Schema: {credential.schema}</div>
+                            <div>Issuer: {credential.sad?.i?.substring(0, 20)}...</div>
                           </div>
                         </div>
                       ))
