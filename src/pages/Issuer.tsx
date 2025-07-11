@@ -30,7 +30,7 @@ import {
 } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
-import { randomPasscode, Saider, Serder } from "signify-ts";
+import { Oobis, randomPasscode, Saider, Serder } from "signify-ts";
 import {
   initializeSignify,
   initializeAndConnectClient,
@@ -103,12 +103,21 @@ const Issuer = () => {
     availableSchemas[0]?.said || ""
   );
   // Target selection
-  const [targetOOBI, setTargetOOBI] = useState("");
-  const [selectedOOBI, setSelectedOOBI] = useState("");
+  const [targetOOBI, setTargetOOBI] = useState({
+    oobis: "",
+    alias: "",
+  });
+  const [selectedOOBI, setSelectedOOBI] = useState({
+    oobis: "",
+    alias: "",
+  });
   const [customOOBI, setCustomOOBI] = useState("");
 
   // Dynamic credential data
   const [credentialData, setCredentialData] = useState<Record<string, any>>({});
+  const LEIPayload = {
+    LEI: "",
+  };
 
   useEffect(() => {
     if (location.state?.config) {
@@ -156,8 +165,31 @@ const Issuer = () => {
 
   useEffect(() => {
     const finalOOBI = selectedOOBI || customOOBI;
-    setTargetOOBI(finalOOBI);
+    if (typeof finalOOBI === "string") {
+      setTargetOOBI({ oobis: finalOOBI, alias: "" });
+    } else {
+      setTargetOOBI({ oobis: finalOOBI.oobis, alias: finalOOBI.alias });
+    }
+    if (accountType === "GLEIF" || accountType === "QVI") {
+      setCredentialData(LEIPayload);
+    }
   }, [selectedOOBI, customOOBI]);
+  useEffect(() => {
+    const loadIssuedCredentials = async () => {
+      if (!issuerClient) return;
+      setIsPolling(true);
+      try {
+        const credList = await issuerClient.credentials().list();
+        console.log("Loaded issued credentials:", credList);
+        setCredentials(credList);
+      } catch (error) {
+        console.error("Error loading issued credentials:", error);
+      } finally {
+        setIsPolling(false);
+      }
+    };
+    loadIssuedCredentials();
+  }, [isConnected, isNewCredential]);
 
   const handleConnect = async (userPasscode: string, isReconnect = false) => {
     setIsProcessing(true);
@@ -272,23 +304,6 @@ const Issuer = () => {
     }
   };
 
-  useEffect(() => {
-    const loadIssuedCredentials = async () => {
-      if (!issuerClient) return;
-      setIsPolling(true);
-      try {
-        const credList = await issuerClient.credentials().list();
-        console.log("Loaded issued credentials:", credList);
-        setCredentials(credList);
-      } catch (error) {
-        console.error("Error loading issued credentials:", error);
-      } finally {
-        setIsPolling(false);
-      }
-    };
-    loadIssuedCredentials();
-  }, [isConnected, isNewCredential]);
-
   const handleIssueCredential = async () => {
     setIsProcessing(true);
     console.log("Issuing credential to target");
@@ -304,7 +319,7 @@ const Issuer = () => {
       }
 
       // Resolve target OOBI
-      await resolveOOBI(issuerClient, targetOOBI, "targetContact");
+      await resolveOOBI(issuerClient, targetOOBI.oobis, targetOOBI.alias);
 
       // Resolve schema OOBI
       const schemaOOBI = `${config.schemaServer}/oobi/${selectedSchema}`;
@@ -317,7 +332,7 @@ const Issuer = () => {
         accountData.alias,
         accountData.registrySaid,
         selectedSchema,
-        targetOOBI.split("/").pop() || "", // Extract AID from OOBI
+        targetOOBI.oobis.split("/")[4] || "", // Extract AID from OOBI
         credentialData
       );
 
@@ -338,7 +353,7 @@ const Issuer = () => {
       const grantResponse = await ipexGrantCredential(
         issuerClient,
         accountData.alias,
-        targetOOBI.split("/").pop() || "",
+        targetOOBI.oobis.split("/")[4] || "",
         credential
       );
 
@@ -568,7 +583,10 @@ const Issuer = () => {
                         {availableSchemas.map((schema) => (
                           <SelectItem key={schema.said} value={schema.said}>
                             <div>
-                              <div className="font-medium">{schema.name}</div>
+                              <div className="font-medium">
+                                {schema.name} - for -{" "}
+                                {schema.targetTypes.join(", ")} - {schema.said}
+                              </div>
                               <div className="text-xs text-slate-500">
                                 {schema.description}
                               </div>
@@ -584,26 +602,47 @@ const Issuer = () => {
                     <Label>Target Entity's OOBI</Label>
 
                     {/* Preconfigured OOBIs */}
-                    {contacts.length > 0 && (
+                    {contacts.filter(
+                      (contact) =>
+                        contact.oobi && contact.oobi.includes("agent")
+                    ).length > 0 && (
                       <div className="space-y-2">
                         <Label htmlFor="preconfiguredOOBI">
                           Existing Contacts
                         </Label>
                         <Select
-                          value={selectedOOBI}
-                          onValueChange={setSelectedOOBI}
+                          value={selectedOOBI.oobis}
+                          onValueChange={(value) => {
+                            const selectedContact = contacts.find(
+                              (contact) =>
+                                contact.oobi === value &&
+                                contact.oobi.includes("agent")
+                            );
+                            setSelectedOOBI({
+                              oobis: value,
+                              alias: selectedContact
+                                ? selectedContact.alias
+                                : "",
+                            });
+                          }}
                         >
                           <SelectTrigger id="preconfiguredOOBI">
-                            <SelectValue placeholder="Select preconfigured target" />
+                            <SelectValue placeholder="Select agent contact" />
                           </SelectTrigger>
                           <SelectContent>
-                            {contacts.map((contact, index) => (
-                              <SelectItem key={index} value={contact.oobi}>
-                                <div className="font-mono text-xs">
-                                  {contact.alias} - {contact.oobi}
-                                </div>
-                              </SelectItem>
-                            ))}
+                            {contacts
+                              .filter(
+                                (contact) =>
+                                  contact.oobi && contact.oobi.includes("agent")
+                              )
+                              .map((contact, index) => (
+                                <SelectItem key={index} value={contact.oobi}>
+                                  <div className="font-mono text-xs">
+                                    {contact.alias} -{" "}
+                                    {contact.oobi.split("/")[4]}
+                                  </div>
+                                </SelectItem>
+                              ))}
                           </SelectContent>
                         </Select>
                       </div>
@@ -627,7 +666,7 @@ const Issuer = () => {
                       <div className="space-y-2">
                         <Label>Selected Target OOBI</Label>
                         <div className="p-2 bg-gray-50 rounded text-xs font-mono break-all">
-                          {targetOOBI}
+                          {customOOBI || targetOOBI.oobis}
                         </div>
                       </div>
                     )}
@@ -642,6 +681,10 @@ const Issuer = () => {
                       value={JSON.stringify(credentialData, null, 2)}
                       onChange={(e) => {
                         try {
+                          console.log(
+                            "Parsing credential data JSON:",
+                            e.target.value
+                          );
                           setCredentialData(JSON.parse(e.target.value));
                         } catch {
                           // Invalid JSON, keep current state
@@ -829,4 +872,5 @@ const Issuer = () => {
 };
 
 import { ContactsSection } from "../components/ContactsSection";
+import { set } from "date-fns";
 export default Issuer;

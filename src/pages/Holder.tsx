@@ -107,6 +107,7 @@ const Holder = () => {
   const [credentials, setCredentials] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [isPolling, setIsPolling] = useState(false);
+  const [incomingCredentials, setIncomingCredentials] = useState([]);
 
   // Target selection for credential requests
   const [targetOOBI, setTargetOOBI] = useState("");
@@ -263,16 +264,52 @@ const Holder = () => {
     if (!holderClient) return;
 
     try {
-      // Check for new notifications
-      const notifications = await holderClient.notifications().list();
-      const unreadNotifications = notifications.filter((n: any) => !n.r);
-
-      for (const notification of unreadNotifications) {
-        if (notification.a && notification.a.r === IPEX_GRANT_ROUTE) {
-          console.log("Received credential grant:", notification);
-          await handleCredentialGrant(notification);
-        }
+      console.log("Holder checking for incoming credentials...");
+      const grantNotifications = await waitForAndGetNotification(
+        holderClient,
+        IPEX_GRANT_ROUTE
+      );
+      if (grantNotifications.length === 0) {
+        console.log("No new grant notifications found.");
+        return;
       }
+      console.log(
+        `Found ${grantNotifications.length} incoming grant notification(s).`
+      );
+
+      const newIncomingPromises = grantNotifications.map(
+        async (notification) => {
+          const grantExchange = await holderClient
+            .exchanges()
+            .get(notification.a.d);
+          return {
+            id: notification.i, // Use the notification ID as the unique key
+            notificationId: notification.i, // Correctly assign the notification ID
+            grantSaid: grantExchange.exn.d,
+            receivedAt: grantExchange.exn.dt,
+            status: "pending",
+            issuer: grantExchange.exn.i || "Unknown Issuer",
+          };
+        }
+      );
+
+      const newIncoming = await Promise.all(newIncomingPromises);
+      // Filter out credentials that are already in the incoming list to avoid duplicates
+      setIncomingCredentials((prev) => {
+        const existingIds = new Set(prev.map((c) => c.id));
+        const uniqueNew = newIncoming.filter((c) => !existingIds.has(c.id));
+        return [...prev, ...uniqueNew];
+      });
+
+      // const notifications = await holderClient.notifications().list();
+      // const unreadNotifications = notifications.filter((n: any) => !n.r);
+
+      // for (const notification of unreadNotifications) {
+      //   if (notification.a && notification.a.r === IPEX_GRANT_ROUTE) {
+      //     console.log("Received credential grant:", notification);
+      //     await handleCredentialGrant(notification);
+      //   }
+      // }
 
       // Refresh credentials list
       await loadCredentials();
@@ -281,36 +318,52 @@ const Holder = () => {
     }
   };
 
-  const handleCredentialGrant = async (notification: any) => {
-    try {
-      console.log("Admitting credential grant...");
+  const handleAdmitCredential = async (incomingCred) => {
+    if (!holderClient) return;
 
+    setIsProcessing(true);
+    try {
+      console.log("Holder admitting credential:", incomingCred.grantSaid);
+
+      // Admit the grant
       const admitResponse = await ipexAdmitGrant(
         holderClient,
-        accountData.alias,
-        notification.a.i, // issuer AID
-        notification.a.d // said
+        holderData.alias,
+        incomingCred.issuer,
+        incomingCred.grantSaid
       );
-
-      console.log("Credential admitted:", admitResponse);
+      console.log("Holder admitting credential");
 
       // Mark notification as read
-      await markNotificationRead(holderClient, notification.i);
+      await markNotificationRead(holderClient, incomingCred.notificationId);
+
+      // Update the incoming credential status
+      setIncomingCredentials((prev) =>
+        prev.map((cred) =>
+          cred.id === incomingCred.id ? { ...cred, status: "admitted" } : cred
+        )
+      );
 
       toast({
-        title: "Credential Received",
-        description: "A new credential has been added to your wallet",
+        title: "Credential Admitted",
+        description: "Credential has been successfully admitted to your wallet",
       });
 
-      // Refresh credentials
-      await loadCredentials();
+      setTimeout(() => {
+        // Remove from incoming after successful admit
+        setIncomingCredentials((prev) =>
+          prev.filter((cred) => cred.id !== incomingCred.id)
+        );
+      }, 2000);
     } catch (error) {
       console.error("Error admitting credential:", error);
       toast({
-        title: "Error",
+        title: "ERROR",
         description: "Failed to admit credential",
         variant: "destructive",
       });
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -341,18 +394,18 @@ const Holder = () => {
       }
 
       // Resolve target OOBI
-      await resolveOOBI(holderClient, targetOOBI, "issuerContact");
+      // await resolveOOBI(holderClient, targetOOBI, "issuerContact");
 
       // Resolve schema OOBI
-      const schemaOOBI = `${config.schemaServer}/oobi/${selectedSchema}`;
-      await resolveOOBI(holderClient, schemaOOBI, "schemaContact");
+      // const schemaOOBI = `${config.schemaServer}/oobi/${selectedSchema}`;
+      // await resolveOOBI(holderClient, schemaOOBI, "schemaContact");
 
-      console.log("Schema resolved from OOBI:", schemaOOBI);
+      // console.log("Schema resolved from OOBI:", schemaOOBI);
 
       const applyResponse = await ipexApplyCredential(
         holderClient,
         accountData.alias,
-        targetOOBI.split("/").pop() || "", // Extract AID from OOBI
+        targetOOBI.split("/")[4] || "", // Extract AID from OOBI
         selectedSchema
       );
 
