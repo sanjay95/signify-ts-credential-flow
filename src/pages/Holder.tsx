@@ -27,6 +27,8 @@ import {
   CheckCircle,
   Copy,
   Wallet,
+  RefreshCw,
+  Eye,
 } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
@@ -106,7 +108,7 @@ const Holder = () => {
 
   const [credentials, setCredentials] = useState([]);
   const [notifications, setNotifications] = useState([]);
-  const [isPolling, setIsPolling] = useState(false);
+  const [isCheckingIncoming, setIsCheckingIncoming] = useState(false);
   const [incomingCredentials, setIncomingCredentials] = useState([]);
 
   // Target selection for credential requests
@@ -137,6 +139,28 @@ const Holder = () => {
     };
     attemptReconnect();
   }, [accountType]);
+  // Add polling mechanism for incoming credentials
+  useEffect(() => {
+    let pollInterval: NodeJS.Timeout;
+
+    if (isConnected && holderClient && !isCheckingIncoming) {
+      setIsCheckingIncoming(true);
+      pollInterval = setInterval(async () => {
+        try {
+          await checkForIncomingCredentials();
+        } catch (error) {
+          console.error("Error during polling:", error);
+        }
+      }, 5000); // Poll every 5 seconds
+    }
+
+    return () => {
+      if (pollInterval) {
+        clearInterval(pollInterval);
+      }
+      setIsCheckingIncoming(false);
+    };
+  }, [isConnected, holderClient]);
 
   useEffect(() => {
     // Save account data to IndexedDB whenever it changes
@@ -237,33 +261,11 @@ const Holder = () => {
     }
   };
 
-  // Add polling mechanism for incoming credentials
-  useEffect(() => {
-    let pollInterval: NodeJS.Timeout;
-
-    if (isConnected && holderClient && !isPolling) {
-      setIsPolling(true);
-      pollInterval = setInterval(async () => {
-        try {
-          await checkForIncomingCredentials();
-        } catch (error) {
-          console.error("Error during polling:", error);
-        }
-      }, 5000); // Poll every 5 seconds
-    }
-
-    return () => {
-      if (pollInterval) {
-        clearInterval(pollInterval);
-      }
-      setIsPolling(false);
-    };
-  }, [isConnected, holderClient]);
-
   const checkForIncomingCredentials = async () => {
     if (!holderClient) return;
 
     try {
+      setIsCheckingIncoming(true);
       console.log("Holder checking for incoming credentials...");
       const grantNotifications = await waitForAndGetNotification(
         holderClient,
@@ -300,6 +302,7 @@ const Holder = () => {
         const uniqueNew = newIncoming.filter((c) => !existingIds.has(c.id));
         return [...prev, ...uniqueNew];
       });
+      console.log("New incoming credentials:", incomingCredentials);
 
       // const notifications = await holderClient.notifications().list();
       // const unreadNotifications = notifications.filter((n: any) => !n.r);
@@ -312,9 +315,11 @@ const Holder = () => {
       // }
 
       // Refresh credentials list
-      await loadCredentials();
+      // await loadCredentials();
     } catch (error) {
       console.error("Error checking for credentials:", error);
+    } finally {
+      setIsCheckingIncoming(false);
     }
   };
 
@@ -328,7 +333,7 @@ const Holder = () => {
       // Admit the grant
       const admitResponse = await ipexAdmitGrant(
         holderClient,
-        holderData.alias,
+        accountData.alias,
         incomingCred.issuer,
         incomingCred.grantSaid
       );
@@ -366,6 +371,37 @@ const Holder = () => {
       setIsProcessing(false);
     }
   };
+
+  useEffect(() => {
+    const getCredential = async () => {
+      const credentials = await holderClient?.credentials()?.list();
+
+      console.log("------ ---- Fetched credential:", credentials);
+      if (!credentials || credentials.length === 0) {
+        console.log("No credentials found for this holder.");
+        return;
+      }
+      setCredentials([]);
+      credentials.map((cred) => {
+        setCredentials((prev) => [
+          ...prev,
+          {
+            id: cred.sad.d,
+            said: cred.sad.d,
+            status: cred.status.et || "received",
+            issuer: cred.sad.i,
+            receivedDate: cred.sad.a.dt,
+            claims: {
+              eventName: cred.sad.a.eventName,
+              accessLevel: cred.sad.a.accessLevel,
+              validDate: cred.sad.a.validDate,
+            },
+          },
+        ]);
+      });
+    };
+    getCredential();
+  }, [incomingCredentials, accountData]);
 
   const loadCredentials = async () => {
     if (!holderClient) return;
@@ -689,56 +725,173 @@ const Holder = () => {
             </TabsContent>
 
             <TabsContent value="wallet" className="space-y-6">
+              {/* incoming credentials section */}
               <Card>
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Wallet className="h-5 w-5" />
-                    My Credentials
-                    {isPolling && (
-                      <div className="flex items-center gap-2 text-sm text-green-600">
-                        <RotateCcw className="h-4 w-4 animate-spin" />
-                        Listening for credentials...
-                      </div>
-                    )}
-                  </CardTitle>
-                  <CardDescription>
-                    View and manage all credentials in your {accountType} wallet
-                  </CardDescription>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="flex items-center gap-2">
+                        <Wallet className="h-5 w-5" />
+                        Incoming Credentials
+                        {isCheckingIncoming && (
+                          <div className="flex items-center gap-2 text-sm text-green-600">
+                            <RotateCcw className="h-4 w-4 animate-spin" />
+                            Listening for credentials...
+                          </div>
+                        )}
+                      </CardTitle>
+                      <CardDescription>
+                        View and manage all credentials in your {accountType}{" "}
+                        wallet
+                      </CardDescription>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={checkForIncomingCredentials}
+                      disabled={isCheckingIncoming}
+                      className="flex items-center gap-2"
+                    >
+                      <RefreshCw
+                        className={`h-4 w-4 ${
+                          isCheckingIncoming ? "animate-spin" : ""
+                        }`}
+                      />
+                      {isCheckingIncoming ? "Checking..." : "Check Now"}
+                    </Button>
+                  </div>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
-                    {credentials.length === 0 ? (
+                    {incomingCredentials.length === 0 ? (
                       <div className="text-center py-8 text-slate-500">
                         No credentials in wallet yet
-                        {isPolling && (
+                        {isCheckingIncoming && (
                           <div className="mt-2 text-sm">
                             Waiting for incoming credentials...
                           </div>
                         )}
                       </div>
                     ) : (
-                      credentials.map((credential: any, index: number) => (
-                        <div
-                          key={credential.sad?.d || index}
-                          className="border rounded-lg p-4 space-y-3"
-                        >
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                              <div className="text-sm font-mono text-slate-600">
-                                {credential.sad?.d?.substring(0, 20)}...
+                      incomingCredentials.map(
+                        (incomingCred: any, index: number) => (
+                          <div
+                            key={incomingCred.id || index}
+                            className="border rounded-lg p-4 space-y-3"
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-3">
+                                <div className="text-sm font-mono text-slate-600">
+                                  {incomingCred.grantSaid.substring(0, 20)}...
+                                </div>
+                                <Badge
+                                  variant={
+                                    incomingCred.status === "admitted"
+                                      ? "default"
+                                      : "secondary"
+                                  }
+                                >
+                                  {incomingCred.status}
+                                </Badge>
                               </div>
-                              <Badge variant="default">Valid</Badge>
+                              <Button
+                                variant="default"
+                                size="sm"
+                                onClick={() =>
+                                  handleAdmitCredential(incomingCred)
+                                }
+                                disabled={
+                                  isProcessing ||
+                                  incomingCred.status === "admitted"
+                                }
+                              >
+                                {incomingCred.status === "admitted"
+                                  ? "Admitted"
+                                  : "Admit Credential"}
+                              </Button>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4 text-sm">
+                              <div>
+                                <span className="text-slate-500">From:</span>
+                                <div className="font-medium font-mono text-xs">
+                                  {incomingCred.issuer.substring(0, 20)}...
+                                </div>
+                              </div>
+                              <div>
+                                <span className="text-slate-500">
+                                  Received:
+                                </span>
+                                <div className="font-medium">
+                                  {new Date(
+                                    incomingCred.receivedAt
+                                  ).toLocaleString()}
+                                </div>
+                              </div>
                             </div>
                           </div>
-                          <div className="text-sm text-slate-600">
-                            <div>Schema: {credential.schema}</div>
-                            <div>
-                              Issuer: {credential.sad?.i?.substring(0, 20)}...
+                        )
+                      )
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+              {/* Stored Credentials Section */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Stored Credentials</CardTitle>
+                  <CardDescription>
+                    View and manage all credentials in your wallet
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    {credentials.map((credential) => (
+                      <div
+                        key={credential.id}
+                        className="border rounded-lg p-4 space-y-3"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="text-sm font-mono text-slate-600">
+                              {credential.said.substring(0, 20)}...
+                            </div>
+                            <Badge variant="default">{credential.status}</Badge>
+                          </div>
+                          <Button variant="outline" size="sm">
+                            <Eye className="h-4 w-4 mr-2" />
+                            View Details
+                          </Button>
+                        </div>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                          <div>
+                            <span className="text-slate-500">Event:</span>
+                            <div className="font-medium">
+                              {credential.claims.eventName}
+                            </div>
+                          </div>
+                          <div>
+                            <span className="text-slate-500">Access:</span>
+                            <div className="font-medium">
+                              {credential.claims.accessLevel}
+                            </div>
+                          </div>
+                          <div>
+                            <span className="text-slate-500">Valid Until:</span>
+                            <div className="font-medium">
+                              {credential.claims.validDate}
+                            </div>
+                          </div>
+                          <div>
+                            <span className="text-slate-500">Received:</span>
+                            <div className="font-medium">
+                              {new Date(
+                                credential.receivedDate
+                              ).toLocaleString()}
                             </div>
                           </div>
                         </div>
-                      ))
-                    )}
+                      </div>
+                    ))}
                   </div>
                 </CardContent>
               </Card>
