@@ -27,6 +27,7 @@ import {
   CheckCircle,
   Copy,
   Building,
+  RefreshCw,
 } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
@@ -79,7 +80,7 @@ const Issuer = () => {
   const [contacts, setContacts] = useState<any[]>([]);
   const [credentials, setCredentials] = useState([]);
   const [isNewCredential, setNewCredential] = useState(false);
-  const [isPolling, setIsPolling] = useState(false);
+  const [isChecking, setIsChecking] = useState(false);
   const accountType = (location.state?.accountType as AccountType) || "GLEIF";
   const [config, setConfig] = useState({
     adminUrl: "https://keria.testnet.gleif.org:3901",
@@ -174,22 +175,25 @@ const Issuer = () => {
       setCredentialData(LEIPayload);
     }
   }, [selectedOOBI, customOOBI]);
+
   useEffect(() => {
     const loadIssuedCredentials = async () => {
-      if (!issuerClient) return;
-      setIsPolling(true);
+      if (!issuerClient || !isChecking) return;
       try {
-        const credList = await issuerClient.credentials().list();
+        const credList = await issuerClient
+          .credentials()
+          .list()
+          .filter((cred) => cred.sad.a.i !== accountData.aid);
         console.log("Loaded issued credentials:", credList);
         setCredentials(credList);
       } catch (error) {
         console.error("Error loading issued credentials:", error);
       } finally {
-        setIsPolling(false);
+        setIsChecking(false);
       }
     };
     loadIssuedCredentials();
-  }, [isConnected, isNewCredential]);
+  }, [isConnected, isNewCredential, isChecking]);
 
   const handleConnect = async (userPasscode: string, isReconnect = false) => {
     setIsProcessing(true);
@@ -711,27 +715,45 @@ const Issuer = () => {
             <TabsContent value="manage" className="space-y-6">
               <Card>
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Building className="h-5 w-5" />
-                    Issued Credentials
-                    {isPolling && (
-                      <div className="flex items-center gap-2 text-sm text-blue-600">
-                        <RotateCcw className="h-4 w-4 animate-spin" />
-                        Monitoring...
-                      </div>
-                    )}
-                  </CardTitle>
-                  <CardDescription>
-                    View and manage all credentials issued by this {accountType}{" "}
-                    AID
-                  </CardDescription>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="flex items-center gap-2">
+                        <Building className="h-5 w-5" />
+                        Issued Credentials
+                        {isChecking && (
+                          <div className="flex items-center gap-2 text-sm text-blue-600">
+                            <RotateCcw className="h-4 w-4 animate-spin" />
+                            Monitoring...
+                          </div>
+                        )}
+                      </CardTitle>
+                      <CardDescription>
+                        View and manage all credentials issued by this{" "}
+                        {accountType} AID
+                      </CardDescription>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setIsChecking(true)}
+                      disabled={isChecking}
+                      className="flex items-center gap-2"
+                    >
+                      <RefreshCw
+                        className={`h-4 w-4 ${
+                          isChecking ? "animate-spin" : ""
+                        }`}
+                      />
+                      {isChecking ? "Checking..." : "Check Now"}
+                    </Button>
+                  </div>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
                     {credentials.length === 0 ? (
                       <div className="text-center py-8 text-slate-500">
                         No credentials issued yet
-                        {isPolling && (
+                        {isChecking && (
                           <div className="mt-2 text-sm">
                             Monitoring for new credentials...
                           </div>
