@@ -76,21 +76,16 @@ const Issuer = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
   const [issuerClient, setIssuerClient] = useState(null);
-
-  // Get account type from navigation state
+  const [contacts, setContacts] = useState<any[]>([]);
+  const [credentials, setCredentials] = useState([]);
+  const [isNewCredential, setNewCredential] = useState(false);
+  const [isPolling, setIsPolling] = useState(false);
   const accountType = (location.state?.accountType as AccountType) || "GLEIF";
   const [config, setConfig] = useState({
     adminUrl: "https://keria.testnet.gleif.org:3901",
     bootUrl: "https://keria.testnet.gleif.org:3903",
     schemaServer: "https://schema.testnet.gleif.org:7723",
   });
-
-  useEffect(() => {
-    if (location.state?.config) {
-      setConfig(location.state.config);
-    }
-  }, [location.state]);
-
   const [accountData, setAccountData] = useState<AccountConfig>({
     type: accountType,
     alias:
@@ -102,25 +97,37 @@ const Issuer = () => {
     oobi: "",
     registrySaid: "",
   });
-
-  const [credentials, setCredentials] = useState([]);
-  const [isNewCredential, setNewCredential] = useState(false);
-  const [isPolling, setIsPolling] = useState(false);
-
   // Available schemas for this account type
   const availableSchemas = getAvailableSchemas(accountType);
   const [selectedSchema, setSelectedSchema] = useState(
     availableSchemas[0]?.said || ""
   );
-
   // Target selection
   const [targetOOBI, setTargetOOBI] = useState("");
-  const [selectedPreconfiguredOOBI, setSelectedPreconfiguredOOBI] =
-    useState("");
+  const [selectedOOBI, setSelectedOOBI] = useState("");
   const [customOOBI, setCustomOOBI] = useState("");
 
   // Dynamic credential data
   const [credentialData, setCredentialData] = useState<Record<string, any>>({});
+
+  useEffect(() => {
+    if (location.state?.config) {
+      setConfig(location.state.config);
+    }
+  }, [location.state]);
+
+  useEffect(() => {
+    const fetchContacts = async () => {
+      try {
+        const contactList = await issuerClient.contacts().list();
+        setContacts(contactList || []);
+        console.log("Fetched contacts:", contactList);
+      } catch (err: any) {
+        console.error("Failed to fetch contacts");
+      }
+    };
+    fetchContacts();
+  }, [issuerClient]);
 
   useEffect(() => {
     const attemptReconnect = async () => {
@@ -148,9 +155,9 @@ const Issuer = () => {
   }, [accountData, accountType]);
 
   useEffect(() => {
-    const finalOOBI = selectedPreconfiguredOOBI || customOOBI;
+    const finalOOBI = selectedOOBI || customOOBI;
     setTargetOOBI(finalOOBI);
-  }, [selectedPreconfiguredOOBI, customOOBI]);
+  }, [selectedOOBI, customOOBI]);
 
   const handleConnect = async (userPasscode: string, isReconnect = false) => {
     setIsProcessing(true);
@@ -574,31 +581,29 @@ const Issuer = () => {
 
                   {/* Target Selection */}
                   <div className="space-y-4">
-                    <Label>Target Entity OOBI</Label>
+                    <Label>Target Entity's OOBI</Label>
 
                     {/* Preconfigured OOBIs */}
-                    {PRECONFIGURED_OOBIS[accountType].length > 0 && (
+                    {contacts.length > 0 && (
                       <div className="space-y-2">
                         <Label htmlFor="preconfiguredOOBI">
-                          Your Existing Contacts
+                          Existing Contacts
                         </Label>
                         <Select
-                          value={selectedPreconfiguredOOBI}
-                          onValueChange={setSelectedPreconfiguredOOBI}
+                          value={selectedOOBI}
+                          onValueChange={setSelectedOOBI}
                         >
                           <SelectTrigger id="preconfiguredOOBI">
                             <SelectValue placeholder="Select preconfigured target" />
                           </SelectTrigger>
                           <SelectContent>
-                            {PRECONFIGURED_OOBIS[accountType].map(
-                              (oobi, index) => (
-                                <SelectItem key={index} value={oobi}>
-                                  <div className="font-mono text-xs">
-                                    {oobi.substring(0, 60)}...
-                                  </div>
-                                </SelectItem>
-                              )
-                            )}
+                            {contacts.map((contact, index) => (
+                              <SelectItem key={index} value={contact.oobi}>
+                                <div className="font-mono text-xs">
+                                  {contact.alias} - {contact.oobi}
+                                </div>
+                              </SelectItem>
+                            ))}
                           </SelectContent>
                         </Select>
                       </div>
@@ -806,7 +811,12 @@ const Issuer = () => {
                   {/* Contacts Section */}
                   <div className="mt-8">
                     <h3 className="text-lg font-semibold mb-2">Contacts</h3>
-                    <ContactsSection client={issuerClient} />
+                    <ContactsSection
+                      client={issuerClient}
+                      contacts={contacts}
+                      setContacts={setContacts}
+                      // filterFn={optionalFilterFn} // e.g. (c) => c.role === 'agent' for Issuer
+                    />
                   </div>
                 </CardContent>
               </Card>

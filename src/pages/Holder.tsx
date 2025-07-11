@@ -79,6 +79,7 @@ const Holder = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
   const [holderClient, setHolderClient] = useState(null);
+  const [contacts, setContacts] = useState<any[]>([]);
 
   // Get account type from navigation state
   const accountType = (location.state?.accountType as AccountType) || "LE";
@@ -748,7 +749,12 @@ const Holder = () => {
                   {/* Contacts Section */}
                   <div className="mt-8">
                     <h3 className="text-lg font-semibold mb-2">Contacts</h3>
-                    <ContactsSection client={holderClient} />
+                    <ContactsSection
+                      client={holderClient}
+                      contacts={contacts}
+                      setContacts={setContacts}
+                      // filterFn={optionalFilterFn} // e.g. (c) => c.role === 'agent' for Issuer
+                    />
                   </div>
                 </CardContent>
               </Card>

@@ -6,11 +6,18 @@ import { SignifyClient } from "signify-ts";
 import { set } from "date-fns";
 
 interface ContactsSectionProps {
-  client: SignifyClient; // Optional client prop for testing
+  client: SignifyClient;
+  contacts: any[];
+  setContacts: React.Dispatch<React.SetStateAction<any[]>>;
+  filterFn?: (contact: any) => boolean;
 }
 
-export const ContactsSection: React.FC<ContactsSectionProps> = ({ client }) => {
-  const [contacts, setContacts] = useState<any[]>([]);
+export const ContactsSection: React.FC<ContactsSectionProps> = ({
+  client,
+  contacts,
+  setContacts,
+  filterFn,
+}) => {
   const [oobiInput, setOobiInput] = useState("");
   const [aliasInput, setAliasInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -75,34 +82,35 @@ export const ContactsSection: React.FC<ContactsSectionProps> = ({ client }) => {
       {error && <div className="text-red-500 text-sm">{error}</div>}
       <div>
         <h4 className="font-medium mb-1">Connected Contacts</h4>
-        {contacts.length === 0 ? (
+        {(filterFn ? contacts.filter(filterFn) : contacts).length === 0 ? (
           <div className="text-gray-500 text-sm">No contacts found.</div>
         ) : (
           <ul className="divide-y divide-gray-200">
-            {contacts.map((contact: any) => (
-              <li key={contact.id || contact.aid} className="py-2">
-                <div className="flex flex-col">
-                  <span className="text-sm">
-                    Alias:{" "}
-                    {contact.alias || (
-                      <span className="italic text-gray-400">(none)</span>
-                    )}
-                  </span>
-                  <span className="font-mono text-xs break-all">
-                    AID: {contact.id}
-                  </span>
-
-                  {contact.oobi && (
-                    <span className="text-xs text-gray-500">
-                      OOBIs:{" "}
-                      {Array.isArray(contact.oobi)
-                        ? contact.oobi.join(", ")
-                        : contact.oobi}
+            {(filterFn ? contacts.filter(filterFn) : contacts).map(
+              (contact: any) => (
+                <li key={contact.id || contact.aid} className="py-2">
+                  <div className="flex flex-col">
+                    <span className="text-sm">
+                      Alias:{" "}
+                      {contact.alias || (
+                        <span className="italic text-gray-400">(none)</span>
+                      )}
                     </span>
-                  )}
-                </div>
-              </li>
-            ))}
+                    <span className="font-mono text-xs break-all">
+                      AID: {contact.id}
+                    </span>
+                    {contact.oobi && (
+                      <span className="text-xs text-gray-500">
+                        OOBIs:{" "}
+                        {Array.isArray(contact.oobi)
+                          ? contact.oobi.join(", ")
+                          : contact.oobi}
+                      </span>
+                    )}
+                  </div>
+                </li>
+              )
+            )}
           </ul>
         )}
       </div>
