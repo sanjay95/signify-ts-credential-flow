@@ -391,11 +391,12 @@ const Holder = () => {
             status: cred.status.et || "received",
             issuer: cred.sad.i,
             receivedDate: cred.sad.a.dt,
-            claims: {
-              eventName: cred.sad.a.eventName,
-              accessLevel: cred.sad.a.accessLevel,
-              validDate: cred.sad.a.validDate,
-            },
+            claims: Object.entries(cred.sad.a)
+              .filter(([key]) => key.length > 2)
+              .reduce((acc, [key, value]) => {
+                acc[key] = value;
+                return acc;
+              }, {} as Record<string, any>),
           },
         ]);
       });
@@ -863,30 +864,28 @@ const Holder = () => {
                           </Button>
                         </div>
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                          <div>
-                            <span className="text-slate-500">Event:</span>
-                            <div className="font-medium">
-                              {credential.claims.eventName}
-                            </div>
-                          </div>
-                          <div>
-                            <span className="text-slate-500">Access:</span>
-                            <div className="font-medium">
-                              {credential.claims.accessLevel}
-                            </div>
-                          </div>
-                          <div>
-                            <span className="text-slate-500">Valid Until:</span>
-                            <div className="font-medium">
-                              {credential.claims.validDate}
-                            </div>
-                          </div>
+                          {Object.entries(credential.claims).map(
+                            ([key, value]) => (
+                              <div key={key}>
+                                <span className="text-slate-500">{key}:</span>
+                                <div className="font-medium">
+                                  {String(value)}
+                                </div>
+                              </div>
+                            )
+                          )}
                           <div>
                             <span className="text-slate-500">Received:</span>
                             <div className="font-medium">
                               {new Date(
                                 credential.receivedDate
                               ).toLocaleString()}
+                            </div>
+                          </div>
+                          <div>
+                            <span className="text-slate-500">Issuer:</span>
+                            <div className="font-medium">
+                              {String(credential.issuer)}
                             </div>
                           </div>
                         </div>
