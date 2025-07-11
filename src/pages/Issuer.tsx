@@ -580,7 +580,7 @@ const Issuer = () => {
                     {PRECONFIGURED_OOBIS[accountType].length > 0 && (
                       <div className="space-y-2">
                         <Label htmlFor="preconfiguredOOBI">
-                          Preconfigured Targets
+                          Your Existing Contacts
                         </Label>
                         <Select
                           value={selectedPreconfiguredOOBI}
@@ -802,6 +802,12 @@ const Issuer = () => {
                       Connected to KERI network as {accountType}
                     </span>
                   </div>
+
+                  {/* Contacts Section */}
+                  <div className="mt-8">
+                    <h3 className="text-lg font-semibold mb-2">Contacts</h3>
+                    <ContactsSection client={issuerClient} />
+                  </div>
                 </CardContent>
               </Card>
             </TabsContent>
@@ -812,4 +818,5 @@ const Issuer = () => {
   );
 };
 
+import { ContactsSection } from "../components/ContactsSection";
 export default Issuer;

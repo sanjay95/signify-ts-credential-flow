@@ -18,7 +18,7 @@ import { getItem, setItem } from "@/utils/db";
 interface PasscodeDialogProps {
   onPasscodeSubmit: (passcode: string) => void;
   isProcessing: boolean;
-  entityType: "issuer" | "holder" | "verifier";
+  entityType: string; // "issuer" | "holder" | "verifier";
 }
 
 export const PasscodeDialog = ({

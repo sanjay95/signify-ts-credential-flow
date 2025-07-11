@@ -59,6 +59,7 @@ import {
   SCHEMA_SERVER_HOST,
   // ipexApplyCredential,
   ipexOfferCredential,
+  ipexApplyCredential,
 } from "../utils/utils";
 import { getItem, setItem } from "@/utils/db";
 import { PasscodeDialog } from "@/components/PasscodeDialog";
@@ -743,6 +744,12 @@ const Holder = () => {
                       Connected to KERI network as {accountType} holder
                     </span>
                   </div>
+
+                  {/* Contacts Section */}
+                  <div className="mt-8">
+                    <h3 className="text-lg font-semibold mb-2">Contacts</h3>
+                    <ContactsSection client={holderClient} />
+                  </div>
                 </CardContent>
               </Card>
             </TabsContent>
@@ -753,4 +760,5 @@ const Holder = () => {
   );
 };
 
+import { ContactsSection } from "../components/ContactsSection";
 export default Holder;

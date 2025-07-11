@@ -53,7 +53,12 @@ import {
 } from "../utils/utils";
 import { getItem, setItem } from "@/utils/db";
 import { PasscodeDialog } from "@/components/PasscodeDialog";
-import { AccountType, AccountConfig, getAvailableSchemas, PRECONFIGURED_OOBIS } from "@/types/accounts";
+import {
+  AccountType,
+  AccountConfig,
+  getAvailableSchemas,
+  PRECONFIGURED_OOBIS,
+} from "@/types/accounts";
 
 const Verifier = () => {
   const navigate = useNavigate();
@@ -107,7 +112,11 @@ const Verifier = () => {
         aid = await verifierClient.identifiers().get(accountData.alias);
         console.log("Existing Verifier AID found:", aid);
 
-        oobi = await generateOOBI(verifierClient, accountData.alias, ROLE_AGENT);
+        oobi = await generateOOBI(
+          verifierClient,
+          accountData.alias,
+          ROLE_AGENT
+        );
       } catch (error) {
         console.log("No existing Verifier AID found, creating new one...");
         const { aid: newAid } = await createNewAID(
@@ -121,7 +130,11 @@ const Verifier = () => {
         console.log("Adding Agent role to AID...");
         await addEndRoleForAID(verifierClient, accountData.alias, ROLE_AGENT);
 
-        oobi = await generateOOBI(verifierClient, accountData.alias, ROLE_AGENT);
+        oobi = await generateOOBI(
+          verifierClient,
+          accountData.alias,
+          ROLE_AGENT
+        );
         console.log("Verifier OOBI generated:", oobi);
       }
 
@@ -369,6 +382,12 @@ const Verifier = () => {
                       Connected to KERI network as Verifier
                     </span>
                   </div>
+
+                  {/* Contacts Section */}
+                  <div className="mt-8">
+                    <h3 className="text-lg font-semibold mb-2">Contacts</h3>
+                    <ContactsSection accountType="verifier" config={config} />
+                  </div>
                 </CardContent>
               </Card>
             </TabsContent>
@@ -379,4 +398,5 @@ const Verifier = () => {
   );
 };
 
+import { ContactsSection } from "../components/ContactsSection";
 export default Verifier;
