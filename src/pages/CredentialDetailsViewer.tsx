@@ -21,26 +21,59 @@ function formatJson(obj: any) {
   return JSON.stringify(obj, null, 2);
 }
 
+// Utility: Detect if object is an ACDC credential (basic heuristic)
+function isACDC(cred: any) {
+  return cred && (cred.sad || cred.schema || cred.edges || cred.rules);
+}
+
+// Utility: Collapsible section for large/nested fields
+const CollapsibleSection: React.FC<{
+  label: string;
+  children: React.ReactNode;
+}> = ({ label, children }) => {
+  const [open, setOpen] = React.useState(false);
+  return (
+    <div className="mb-2">
+      <button
+        className="text-xs font-semibold text-blue-700 hover:underline focus:outline-none"
+        onClick={() => setOpen((v) => !v)}
+        type="button"
+      >
+        {open ? "▼" : "▶"} {label}
+      </button>
+      {open && <div className="mt-1 ml-4">{children}</div>}
+    </div>
+  );
+};
+
 export const CredentialDetailsViewer: React.FC<
   CredentialDetailsViewerProps
 > = ({ open, onClose, credential }) => {
   if (!credential) return null;
-  // Try to extract the most relevant fields for display
+
+  // Extract common fields
   const status =
     credential.status || credential.status?.et || credential?.status?.et;
   const sad = credential.sad || credential?.sad;
   const schema = credential.schema || credential?.schema;
+  const edges = credential.edges || credential?.edges;
+  const rules = credential.rules || credential?.rules;
 
-  return (
-    <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>Credential Details</DialogTitle>
-          <DialogDescription>
-            Below are the details for this credential. You can copy or inspect
-            the JSON as needed.
-          </DialogDescription>
-        </DialogHeader>
+  // Helper to render a field as pretty JSON (with wrapping)
+  function renderWrappedJson(json: any) {
+    if (!json) return <span className="text-slate-400">-</span>;
+    const jsonStr = formatJson(json);
+    return (
+      <pre className="bg-gray-100 rounded p-2 text-xs overflow-x-auto break-words max-h-80 whitespace-pre-wrap">
+        {jsonStr}
+      </pre>
+    );
+  }
+
+  // Render ACDC/vLEI details dynamically
+  function renderACDCDetails() {
+    return (
+      <>
         <div className="mb-4">
           <div className="flex items-center gap-2">
             <span className="font-semibold">Status:</span>
@@ -55,18 +88,52 @@ export const CredentialDetailsViewer: React.FC<
               : schema?.$id || schema?.s || "-"}
           </div>
         </div>
+        {sad && (
+          <CollapsibleSection label="Credential SAD (Self-Addressing Data)">
+            {renderWrappedJson(sad)}
+          </CollapsibleSection>
+        )}
+        {edges && (
+          <CollapsibleSection label="Edges (Credential Links)">
+            {renderWrappedJson(edges)}
+          </CollapsibleSection>
+        )}
+        {rules && (
+          <CollapsibleSection label="Rules (Embedded/Legal)">
+            {renderWrappedJson(rules)}
+          </CollapsibleSection>
+        )}
+        <CollapsibleSection label="Full Credential Object">
+          {renderWrappedJson(credential)}
+        </CollapsibleSection>
+      </>
+    );
+  }
+
+  // Fallback: generic JSON view
+  function renderGenericDetails() {
+    return (
+      <>
         <div className="mb-4">
-          <span className="font-semibold">Credential SAD:</span>
-          <pre className="bg-gray-100 rounded p-2 text-xs overflow-x-auto max-h-64">
-            {formatJson(sad)}
-          </pre>
+          <span className="font-semibold">Credential Object:</span>
+          {renderWrappedJson(credential)}
         </div>
-        <div className="mb-4">
-          <span className="font-semibold">Full Credential Object:</span>
-          <pre className="bg-gray-100 rounded p-2 text-xs overflow-x-auto max-h-64">
-            {formatJson(credential)}
-          </pre>
-        </div>
+      </>
+    );
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="max-w-screen-md w-full">
+        <DialogHeader>
+          <DialogTitle>Credential Details</DialogTitle>
+          <DialogDescription>
+            Below are the details for this credential. Fields are shown
+            dynamically for ACDC/vLEI credentials. Expand sections for more
+            details.
+          </DialogDescription>
+        </DialogHeader>
+        {isACDC(credential) ? renderACDCDetails() : renderGenericDetails()}
         <DialogClose asChild>
           <Button variant="outline">Close</Button>
         </DialogClose>
