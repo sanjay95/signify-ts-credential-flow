@@ -226,24 +226,108 @@ export const CredentialDetailsViewer: React.FC<
   // Holder-specific summary
   function renderHolderSummary() {
     return (
-      <div className="mb-2 flex flex-wrap gap-4 items-center">
-        <div>
-          <span className="font-semibold">Issuer:</span>{" "}
-          <span className="font-mono text-xs">{issuer || "-"}</span>
-        </div>
-        <div>
-          <span className="font-semibold">Type:</span> {friendlyTypeLabel(type)}
-        </div>
-        <div>
-          <span className="font-semibold">Status:</span>{" "}
-          <Badge variant={statusBadgeColor(status)}>
-            {status ? String(status) : "-"}
-          </Badge>
-        </div>
-        {receivedDate && (
+      <div className="mb-4">
+        <div className="mb-2 flex flex-wrap gap-4 items-center">
           <div>
-            <span className="font-semibold">Received:</span>{" "}
-            {new Date(receivedDate).toLocaleString()}
+            <span className="font-semibold">Issuer:</span>{" "}
+            <span className="font-mono text-xs">{issuer || "-"}</span>
+            {issuer && (
+              <Button
+                size="icon"
+                variant="ghost"
+                className="ml-1 p-1"
+                title="Copy Issuer AID"
+                onClick={() => navigator.clipboard.writeText(issuer)}
+              >
+                <svg width="14" height="14" fill="none" viewBox="0 0 24 24">
+                  <path
+                    stroke="#64748b"
+                    strokeWidth="2"
+                    d="M8 7V5.4A2.4 2.4 0 0 1 10.4 3h8.2A2.4 2.4 0 0 1 21 5.4v8.2a2.4 2.4 0 0 1-2.4 2.4H17"
+                  />
+                  <rect
+                    width="13"
+                    height="13"
+                    x="3"
+                    y="8"
+                    stroke="#64748b"
+                    strokeWidth="2"
+                    rx="2.4"
+                  />
+                </svg>
+              </Button>
+            )}
+          </div>
+          <div>
+            <span className="font-semibold">Type:</span>{" "}
+            {friendlyTypeLabel(type)}
+          </div>
+          <div>
+            <span className="font-semibold">Status:</span>{" "}
+            <Badge variant={statusBadgeColor(status)}>
+              {status ? String(status) : "-"}
+            </Badge>
+          </div>
+          {receivedDate && (
+            <div>
+              <span className="font-semibold">Received:</span>{" "}
+              {new Date(receivedDate).toLocaleString()}
+            </div>
+          )}
+        </div>
+        {said && (
+          <div className="mb-2">
+            <span className="font-semibold">SAID:</span>
+            <span className="font-mono text-xs break-all bg-slate-50 rounded p-1 mt-1 inline-block">
+              {said}
+            </span>
+            <Button
+              size="icon"
+              variant="ghost"
+              className="ml-1 p-1"
+              title="Copy SAID"
+              onClick={() => navigator.clipboard.writeText(said)}
+            >
+              <svg width="14" height="14" fill="none" viewBox="0 0 24 24">
+                <path
+                  stroke="#64748b"
+                  strokeWidth="2"
+                  d="M8 7V5.4A2.4 2.4 0 0 1 10.4 3h8.2A2.4 2.4 0 0 1 21 5.4v8.2a2.4 2.4 0 0 1-2.4 2.4H17"
+                />
+                <rect
+                  width="13"
+                  height="13"
+                  x="3"
+                  y="8"
+                  stroke="#64748b"
+                  strokeWidth="2"
+                  rx="2.4"
+                />
+              </svg>
+            </Button>
+          </div>
+        )}
+        {schema && (
+          <div className="mb-2">
+            <span className="font-semibold">Schema:</span>
+            <span className="text-xs text-slate-600 break-all ml-1">
+              {schema?.title
+                ? `${schema.title} (${schema.$id || schema.s || ""})`
+                : schema?.$id || schema?.s || "-"}
+            </span>
+          </div>
+        )}
+        {claims && (
+          <div className="mb-2">
+            <span className="font-semibold">Claims / Attributes:</span>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-1">
+              {Object.entries(claims).map(([key, value]) => (
+                <div key={key} className="bg-gray-50 rounded p-2 text-xs">
+                  <span className="font-semibold text-slate-600">{key}:</span>{" "}
+                  {String(value)}
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>
