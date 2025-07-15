@@ -124,13 +124,15 @@ export const CredentialDetailsViewer: React.FC<
               {status ? String(status) : "-"}
             </Badge>
           </div>
-          {said && (
-            <div>
-              <span className="font-semibold">SAID:</span>{" "}
-              <span className="font-mono text-xs">{said}</span>
-            </div>
-          )}
         </div>
+        {said && (
+          <div className="mb-2">
+            <span className="font-semibold">SAID:</span>
+            <div className="font-mono text-xs break-all max-w-full bg-slate-50 rounded p-1 mt-1">
+              {said}
+            </div>
+          </div>
+        )}
         <div className="mb-2 flex flex-wrap gap-4 items-center">
           {issuer && (
             <div>
