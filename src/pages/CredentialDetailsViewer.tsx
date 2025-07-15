@@ -15,7 +15,7 @@ interface CredentialDetailsViewerProps {
   open: boolean;
   onClose: () => void;
   credential: any;
-      viewerType?: "issuer" | "holder"; // Optional, for context-specific view
+  viewerType?: "issuer" | "holder"; // Optional, for context-specific view
 }
 
 function formatJson(obj: any) {
@@ -54,7 +54,8 @@ export const CredentialDetailsViewer: React.FC<
 
   // Extract fields
   // Status: prefer status.et if present, else fallback
-  const status = credential.status?.et || credential.status || credential?.status?.et;
+  const status =
+    credential.status?.et || credential.status || credential?.status?.et;
   const sad = credential.sad || credential?.sad;
   const schema = credential.schema || credential?.schema;
   const edges = credential.edges || credential?.edges;
@@ -119,7 +120,9 @@ export const CredentialDetailsViewer: React.FC<
           </div>
           <div>
             <span className="font-semibold">Status:</span>{" "}
-            <Badge variant={statusBadgeColor(status)}>{status ? String(status) : '-'}</Badge>
+            <Badge variant={statusBadgeColor(status)}>
+              {status ? String(status) : "-"}
+            </Badge>
           </div>
           {said && (
             <div>
@@ -204,7 +207,9 @@ export const CredentialDetailsViewer: React.FC<
         </div>
         <div>
           <span className="font-semibold">Status:</span>{" "}
-          <Badge variant={statusBadgeColor(status)}>{status ? String(status) : '-'}</Badge>
+          <Badge variant={statusBadgeColor(status)}>
+            {status ? String(status) : "-"}
+          </Badge>
         </div>
         {issuedDate && (
           <div>
@@ -229,7 +234,9 @@ export const CredentialDetailsViewer: React.FC<
         </div>
         <div>
           <span className="font-semibold">Status:</span>{" "}
-          <Badge variant={statusBadgeColor(status)}>{status ? String(status) : '-'}</Badge>
+          <Badge variant={statusBadgeColor(status)}>
+            {status ? String(status) : "-"}
+          </Badge>
         </div>
         {receivedDate && (
           <div>
