@@ -407,6 +407,7 @@ const Holder = () => {
             said: cred.sad.d,
             status: cred.status.et || "received",
             issuer: cred.sad.i,
+            issuee: cred.sad.a.i,
             receivedDate: cred.sad.a.dt,
             claims: Object.entries(cred.sad.a)
               .filter(([key]) => key.length > 2)
@@ -414,6 +415,7 @@ const Holder = () => {
                 acc[key] = value;
                 return acc;
               }, {} as Record<string, any>),
+            rawCredentials: cred,
           },
         ]);
       });
@@ -731,11 +733,14 @@ const Holder = () => {
                       }
                     >
                       <option value="">Choose a credential...</option>
-                      {credentials.map((cred) => (
-                        <option key={cred.id} value={cred.id}>
-                          {cred.claims.eventName} - {cred.claims.accessLevel}
-                        </option>
-                      ))}
+                      {credentials
+                        .filter((cred) => cred.issuee === accountData.aid)
+                        .map((cred) => (
+                          <option key={cred.id} value={cred.id}>
+                            {cred.id} -{" "}
+                            {new Date(cred.receivedDate).toLocaleDateString()}
+                          </option>
+                        ))}
                     </select>
                   </div>
                   <Button
@@ -754,6 +759,7 @@ const Holder = () => {
                   </Button>
                 </CardContent>
               </Card>
+
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
