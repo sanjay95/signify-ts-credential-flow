@@ -70,8 +70,13 @@ import {
   AccountConfig,
   getAvailableSchemas,
   PRECONFIGURED_OOBIS,
+  SCHEMA_OPTIONS,
 } from "@/types/accounts";
 import { FIXED_PASSCODES } from "@/config/environment";
+import {
+  Config as ConfigContext,
+  useConfigContext,
+} from "@/context/ConfigContext";
 
 const Holder = () => {
   const navigate = useNavigate();
@@ -85,17 +90,14 @@ const Holder = () => {
 
   // Get account type from navigation state
   const accountType = (location.state?.accountType as AccountType) || "LE";
-  const [config, setConfig] = useState({
-    adminUrl: "https://keria.testnet.gleif.org:3901",
-    bootUrl: "https://keria.testnet.gleif.org:3903",
-    schemaServer: "https://schema.testnet.gleif.org:7723",
-  });
+  const { config } = useConfigContext();
+  // const [config, setConfig] = useState<ConfigContext>();
 
-  useEffect(() => {
-    if (location.state?.config) {
-      setConfig(location.state.config);
-    }
-  }, [location.state]);
+  // useEffect(() => {
+  //   if (location.state?.config) {
+  //     setConfig(location.state.config);
+  //   }
+  // }, [location.state]);
 
   const [accountData, setAccountData] = useState<AccountConfig>({
     type: accountType,
@@ -151,7 +153,7 @@ const Holder = () => {
         } catch (error) {
           console.error("Error during polling:", error);
         }
-      }, 5000); // Poll every 5 seconds
+      }, 120000); // Poll every 30 seconds
     }
 
     return () => {
@@ -174,6 +176,17 @@ const Holder = () => {
     const finalOOBI = selectedPreconfiguredOOBI || customOOBI;
     setTargetOOBI(finalOOBI);
   }, [selectedPreconfiguredOOBI, customOOBI]);
+
+  useEffect(() => {
+    if (!holderClient) return;
+    SCHEMA_OPTIONS?.map((schema) => {
+      resolveOOBI(
+        holderClient,
+        `${config?.schemaServer}/oobi/${schema?.said}`,
+        schema?.name
+      );
+    });
+  }, [holderClient, isConnected, config]);
 
   const handleConnect = async (userPasscode: string, isReconnect = false) => {
     setIsProcessing(true);

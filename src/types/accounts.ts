@@ -84,12 +84,19 @@ export const getAvailableSchemas = (
     case "GLEIF":
       return SCHEMA_OPTIONS.filter((s) => s.name === "QVI Credential");
     case "QVI":
-      return SCHEMA_OPTIONS.filter((s) => s.name === "vLEI Credential");
+      return SCHEMA_OPTIONS.filter(
+        (s) => s.name === "vLEI Credential" || s.name === "ECR Credential"
+      );
     case "LE":
-      return SCHEMA_OPTIONS.filter((s) => s.name.includes("Auth"));
+      return SCHEMA_OPTIONS.filter(
+        (s) =>
+          s.name === "ECR Credential" ||
+          s.name === "OOR Auth Credential" ||
+          s.name === "ECR Auth Credential"
+      );
     case "LE-OOR":
       return SCHEMA_OPTIONS.filter(
-        (s) => s.name === "OOR Credential" || s.name === "ECR Credential"
+        (s) => s.name === "OOR Credential" || s.name === "OOR Auth Credential"
       );
     default:
       return [];
@@ -146,3 +153,28 @@ export const ECR_AUTH_RULES = Saider.saidify({
 })[1];
 export const OOR_RULES = LE_RULES;
 export const OOR_AUTH_RULES = LE_RULES;
+
+export const LEIPayload = {
+  LEI: "",
+};
+
+export const ecrData = {
+  LEI: "",
+  personLegalName: "John Doe",
+  engagementContextRole: "Managing Director",
+};
+
+export const credPayload: (schemaSaid: string) => any = (
+  schemaSaid: string
+) => {
+  // Return payload based on schemaSaid, update as needed
+  switch (schemaSaid) {
+    case SCHEMAS.LE:
+    case SCHEMAS.QVI:
+      return { ...LEIPayload };
+    case SCHEMAS.ECR:
+      return { ...ecrData };
+    default:
+      return {};
+  }
+};

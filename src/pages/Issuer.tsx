@@ -34,7 +34,14 @@ import {
 } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
-import { Oobis, randomPasscode, Saider, Serder } from "signify-ts";
+import {
+  Config,
+  Oobis,
+  randomPasscode,
+  Saider,
+  Schemas,
+  Serder,
+} from "signify-ts";
 import {
   initializeSignify,
   initializeAndConnectClient,
@@ -71,8 +78,16 @@ import {
   PRECONFIGURED_OOBIS,
   SCHEMAS,
   LE_RULES,
+  LEIPayload,
+  credPayload,
+  ECR_RULES,
+  SCHEMA_OPTIONS,
 } from "@/types/accounts";
 import { FIXED_PASSCODES } from "@/config/environment";
+import {
+  Config as ConfigContext,
+  useConfigContext,
+} from "@/context/ConfigContext";
 
 const Issuer = () => {
   const navigate = useNavigate();
@@ -87,11 +102,6 @@ const Issuer = () => {
   const [isNewCredential, setNewCredential] = useState(false);
   const [isChecking, setIsChecking] = useState(false);
   const accountType = (location.state?.accountType as AccountType) || "GLEIF";
-  const [config, setConfig] = useState({
-    adminUrl: "https://keria.testnet.gleif.org:3901",
-    bootUrl: "https://keria.testnet.gleif.org:3903",
-    schemaServer: "https://schema.testnet.gleif.org:7723",
-  });
   const [accountData, setAccountData] = useState<AccountConfig>({
     type: accountType,
     alias:
@@ -121,22 +131,25 @@ const Issuer = () => {
 
   // Dynamic credential data
   const [credentialData, setCredentialData] = useState<Record<string, any>>({});
-  const LEIPayload = {
-    LEI: "",
-  };
+
   // Check if this account type has a fixed passcode
   const hasFixedPasscode = accountType in FIXED_PASSCODES;
   const fixedPasscode = hasFixedPasscode
     ? FIXED_PASSCODES[accountType as keyof typeof FIXED_PASSCODES]
     : undefined;
 
-  useEffect(() => {
-    if (location.state?.config) {
-      setConfig(location.state.config);
-    }
-  }, [location.state]);
+  const { config } = useConfigContext();
+
+  // const [config, setConfig] = useState<ConfigContext>();
+  // useEffect(() => {
+  //   if (location.state?.config) {
+  //     setConfig(location.state.config);
+  //     console.log("Config loaded from state:", location.state.config);
+  //   }
+  // }, [location.state]);
 
   useEffect(() => {
+    if (!issuerClient) return;
     const fetchContacts = async () => {
       try {
         const contactList = await issuerClient.contacts().list();
@@ -147,7 +160,14 @@ const Issuer = () => {
       }
     };
     fetchContacts();
-  }, [issuerClient]);
+    SCHEMA_OPTIONS?.map((schema) => {
+      resolveOOBI(
+        issuerClient,
+        `${config?.schemaServer}/oobi/${schema?.said}`,
+        schema?.name
+      );
+    });
+  }, [issuerClient, config, isConnected]);
 
   useEffect(() => {
     const attemptReconnect = async () => {
@@ -181,10 +201,12 @@ const Issuer = () => {
     } else {
       setTargetOOBI({ oobis: finalOOBI.oobis, alias: finalOOBI.alias });
     }
-    if (accountType === "GLEIF" || accountType === "QVI") {
-      setCredentialData(LEIPayload);
-    }
+    setCredentialData(credPayload(selectedSchema));
   }, [selectedOOBI, customOOBI]);
+
+  useEffect(() => {
+    setCredentialData(credPayload(selectedSchema));
+  }, [selectedSchema]);
 
   useEffect(() => {
     const loadIssuedCredentials = async () => {
@@ -335,17 +357,28 @@ const Issuer = () => {
       // Resolve target OOBI
       await resolveOOBI(issuerClient, targetOOBI.oobis, targetOOBI.alias);
 
-      // Resolve schema OOBI
-      const schemaOOBI = `${config.schemaServer}/oobi/${selectedSchema}`;
-      await resolveOOBI(issuerClient, schemaOOBI, "schemaContact");
-
-      console.log("Schema resolved from OOBI:", schemaOOBI);
-
       let credentialSaid;
       // Call different issue method based on account type
-      switch (accountType) {
-        case "QVI":
-          console.log("Issuing as QVI");
+      switch (selectedSchema) {
+        case SCHEMAS.QVI:
+          console.log("Issuing as GLEIF to QVI a QVI credentials");
+          credentialSaid = await issueCredential(
+            issuerClient,
+            accountData.alias,
+            accountData.registrySaid,
+            selectedSchema, // QVI schema - next in chain GLEIF-QVI-LE-OOR-ECR
+            targetOOBI.oobis.split("/")[4] || "", // Extract AID from OOBI,
+            credentialData
+          );
+          break;
+        case SCHEMAS.OOR:
+          console.log(
+            "Issuing as QVI to LE-OOR a OOR credentials based on OOR auth credential"
+          );
+          break;
+
+        case SCHEMAS.LE:
+          console.log("Issuing as QVI to LE a LE credentials");
           console.log("finding QVI credentials");
           let filter: { [x: string]: any } = { "-s": SCHEMAS.QVI };
           const QviCredential = await issuerClient
@@ -366,28 +399,65 @@ const Issuer = () => {
             },
           };
 
-          const leEdge = Saider.saidify(edge)[1];
           console.log("sadifying done:");
           console.log("starting issuing QVI credential");
           credentialSaid = await issueCredential(
             issuerClient,
             accountData.alias,
             accountData.registrySaid,
-            SCHEMAS.LE, //next in chain GLEIF-QVI-LE-OOR-ECR
+            selectedSchema, // LE schema next in chain GLEIF-QVI-LE-OOR-ECR
             targetOOBI.oobis.split("/")[4] || "", // Extract AID from OOBI
             credentialData,
-            leEdge,
+            Saider.saidify(edge)[1],
             leRules
           );
           break;
-        case "GLEIF":
+        case SCHEMAS.OOR_AUTH:
+          console.log("Issuing as LE to QVI a OOR_AUTH credentials");
+          break;
+        case SCHEMAS.ECR_AUTH:
+          console.log("Issuing as LE to QVI a ECR_AUTH credentials");
+          break;
+        case SCHEMAS.ECR:
+          if (accountType === "LE") {
+            console.log("Issuing as LE to a person a ECR credentials");
+          } else if (accountType === "QVI") {
+            console.log("Issuing as QVI to LE-OOR a ECR credentials"); //QVI can also issue ECR credentials based on ECR auth issued to QVI from LE
+            //modify code to consider this else logic, default is LE issuing ECR credentials
+          }
+          console.log("finding LE (Own) credentials");
+          let leCredFilter: { [x: string]: any } = { "-s": SCHEMAS.LE };
+          const LeCredential = await issuerClient
+            .credentials()
+            .list({ filter: leCredFilter });
+          console.log("LE Credentials:", LeCredential);
+          console.log("sadify rules for GLIEF chain");
+
+          const ecrRulesSadified = ECR_RULES;
+          console.log("ecrRules Sadified", ecrRulesSadified);
+
+          console.log("sadify edge for GLIEF chain");
+          const ecrEdge = {
+            d: "",
+            le: {
+              // LE credential edge
+              n: LeCredential[0].sad.d,
+              s: LeCredential[0].sad.s,
+            },
+          };
+
+          console.log("sadifying done:");
+          console.log("starting issuing QVI credential");
           credentialSaid = await issueCredential(
             issuerClient,
             accountData.alias,
             accountData.registrySaid,
-            SCHEMAS.QVI, //next in chain GLEIF-QVI-LE-OOR-ECR
-            targetOOBI.oobis.split("/")[4] || "", // Extract AID from OOBI,
-            credentialData
+            selectedSchema, //ECR to a person next in chain GLEIF-QVI-LE-ECR
+            targetOOBI.oobis.split("/")[4] || "", // Extract AID from OOBI
+            credentialData,
+            Saider.saidify(ecrEdge)[1],
+            ecrRulesSadified,
+            true // ECR is always issued to a person, so true
           );
           break;
         default:
@@ -395,7 +465,7 @@ const Issuer = () => {
             issuerClient,
             accountData.alias,
             accountData.registrySaid,
-            "schemaSaid",
+            "schemaSaid", //fails here
             targetOOBI.oobis.split("/")[4] || "", // Extract AID from OOBI,
             credentialData
           );
@@ -508,8 +578,8 @@ const Issuer = () => {
             </div>
             <div className="ml-auto flex items-center gap-4">
               <div className="text-sm text-slate-500">
-                <div>Admin: {config.adminUrl}</div>
-                <div>Boot: {config.bootUrl}</div>
+                <div>Admin: {config?.adminUrl}</div>
+                <div>Boot: {config?.bootUrl}</div>
               </div>
               <Badge
                 variant={isConnected ? "default" : "secondary"}
