@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import React from "react";
 import {
   Card,
   CardContent,
@@ -31,6 +32,7 @@ import {
   Copy,
   Building,
   RefreshCw,
+  Eye,
 } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
@@ -88,6 +90,7 @@ import {
   Config as ConfigContext,
   useConfigContext,
 } from "@/context/ConfigContext";
+import { CredentialDetailsViewer } from "./CredentialDetailsViewer";
 
 const Issuer = () => {
   const navigate = useNavigate();
@@ -548,6 +551,65 @@ const Issuer = () => {
       setIsProcessing(false);
     }
   }
+
+  const IssuerCredentialCard = ({
+    credential,
+    accountType,
+    handleRevokeCredential,
+  }: any) => {
+    const [detailsOpen, setDetailsOpen] = React.useState(false);
+    return (
+      <div className="border rounded-lg p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="text-sm font-mono text-slate-600">
+              Credential SAID: {credential.sad?.d || ""}
+            </div>
+            <Badge
+              variant="default"
+              style={{ textTransform: "capitalize", marginLeft: "0.5rem" }}
+            >
+              {credential.status.et === "iss" ? "Issued" : "Revoked"}
+            </Badge>
+            {credential.status.et === "iss" && (
+              <Badge
+                variant="destructive"
+                style={{ textTransform: "capitalize", marginLeft: "0.5rem" }}
+                onClick={() => {
+                  if (accountType === "GLEIF") {
+                    alert(
+                      "GLEIF credentials should not be revoked directly. It might be in use by other as GLEIF is root for all test apps."
+                    );
+                    return;
+                  }
+                  handleRevokeCredential(credential.sad?.d);
+                }}
+              >
+                Revoke
+              </Badge>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setDetailsOpen(true)}
+            >
+              <Eye className="h-4 w-4 mr-1" /> View Details
+            </Button>
+            <CredentialDetailsViewer
+              open={detailsOpen}
+              onClose={() => setDetailsOpen(false)}
+              credential={credential}
+            />
+          </div>
+        </div>
+        <div className="text-sm text-slate-600">
+          <div>VC date: {new Date(credential.status.dt).toLocaleString()}</div>
+          <div>Issued to: {credential.sad?.a?.i}</div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-slate-50">
       {/* Header */}
@@ -887,56 +949,12 @@ const Issuer = () => {
                       </div>
                     ) : (
                       credentials.map((credential: any, index: number) => (
-                        <div
+                        <IssuerCredentialCard
                           key={credential.sad?.d || index}
-                          className="border rounded-lg p-4 space-y-3"
-                        >
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                              <div className="text-sm font-mono text-slate-600">
-                                Credential SAID: {credential.sad?.d || ""}
-                              </div>
-                              <Badge
-                                variant="default"
-                                style={{
-                                  textTransform: "capitalize",
-                                  marginLeft: "0.5rem",
-                                }}
-                              >
-                                {credential.status.et === "iss"
-                                  ? "Issued"
-                                  : "Revoked"}
-                              </Badge>
-                              {credential.status.et === "iss" && (
-                                <Badge
-                                  variant="destructive"
-                                  style={{
-                                    textTransform: "capitalize",
-                                    marginLeft: "0.5rem",
-                                  }}
-                                  onClick={() => {
-                                    if (accountType === "GLEIF") {
-                                      alert(
-                                        "GLEIF credentials should not be revoked directly. It might be in use by other as GLEIF is root for all test apps."
-                                      );
-                                      return;
-                                    }
-                                    handleRevokeCredential(credential.sad?.d);
-                                  }}
-                                >
-                                  Revoke
-                                </Badge>
-                              )}
-                            </div>
-                          </div>
-                          <div className="text-sm text-slate-600">
-                            <div>
-                              VC date:{" "}
-                              {new Date(credential.status.dt).toLocaleString()}
-                            </div>
-                            <div>Issued to: {credential.sad?.a?.i}</div>
-                          </div>
-                        </div>
+                          credential={credential}
+                          accountType={accountType}
+                          handleRevokeCredential={handleRevokeCredential}
+                        />
                       ))
                     )}
                   </div>

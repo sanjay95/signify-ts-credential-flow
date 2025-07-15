@@ -1,4 +1,51 @@
-import { useState, useEffect } from "react";
+// CredentialCard component for showing credential summary and details dialog
+
+const CredentialCard = ({ credential }: { credential: any }) => {
+  const [detailsOpen, setDetailsOpen] = React.useState(false);
+  return (
+    <div className="border rounded-lg p-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="text-sm font-mono text-slate-600">
+            {credential.said.substring(0, 20)}...
+          </div>
+          <Badge variant="default">{credential.status}</Badge>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setDetailsOpen(true)}
+        >
+          <Eye className="h-4 w-4 mr-1" /> View Details
+        </Button>
+        <CredentialDetailsViewer
+          open={detailsOpen}
+          onClose={() => setDetailsOpen(false)}
+          credential={credential}
+        />
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+        {Object.entries(credential.claims).map(([key, value]) => (
+          <div key={key}>
+            <span className="text-slate-500">{key}:</span>
+            <div className="font-medium">{String(value)}</div>
+          </div>
+        ))}
+        <div>
+          <span className="text-slate-500">Received:</span>
+          <div className="font-medium">
+            {new Date(credential.receivedDate).toLocaleString()}
+          </div>
+        </div>
+        <div>
+          <span className="text-slate-500">Issuer:</span>
+          <div className="font-medium">{String(credential.issuer)}</div>
+        </div>
+      </div>
+    </div>
+  );
+};
+import React, { useState, useEffect } from "react";
 import {
   Card,
   CardContent,
@@ -860,49 +907,10 @@ const Holder = () => {
                 <CardContent>
                   <div className="space-y-4">
                     {credentials.map((credential) => (
-                      <div
+                      <CredentialCard
                         key={credential.id}
-                        className="border rounded-lg p-4 space-y-3"
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <div className="text-sm font-mono text-slate-600">
-                              {credential.said.substring(0, 20)}...
-                            </div>
-                            <Badge variant="default">{credential.status}</Badge>
-                          </div>
-                          <Button variant="outline" size="sm">
-                            <Eye className="h-4 w-4 mr-2" />
-                            View Details
-                          </Button>
-                        </div>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                          {Object.entries(credential.claims).map(
-                            ([key, value]) => (
-                              <div key={key}>
-                                <span className="text-slate-500">{key}:</span>
-                                <div className="font-medium">
-                                  {String(value)}
-                                </div>
-                              </div>
-                            )
-                          )}
-                          <div>
-                            <span className="text-slate-500">Received:</span>
-                            <div className="font-medium">
-                              {new Date(
-                                credential.receivedDate
-                              ).toLocaleString()}
-                            </div>
-                          </div>
-                          <div>
-                            <span className="text-slate-500">Issuer:</span>
-                            <div className="font-medium">
-                              {String(credential.issuer)}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
+                        credential={credential}
+                      />
                     ))}
                   </div>
                 </CardContent>
@@ -985,4 +993,6 @@ const Holder = () => {
 };
 
 import { ContactsSection } from "../components/ContactsSection";
+
+import { CredentialDetailsViewer } from "./CredentialDetailsViewer";
 export default Holder;
