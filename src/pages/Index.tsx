@@ -175,133 +175,139 @@ const Index = () => {
       </div>
 
       <div className="container mx-auto px-6 py-12">
-        {/* Supported Schemas Dropdown */}
-        <div
-          className="mb-8 max-w-md mx-auto"
-          onMouseEnter={() => setIsSchemaHovered(true)}
-          onMouseLeave={() => setIsSchemaHovered(false)}
-        >
-          <Collapsible open={isSchemaOpen} onOpenChange={setIsSchemaOpen}>
-            <CollapsibleTrigger asChild>
-              <Button
-                variant="outline"
-                className="w-full max-w-md mx-auto flex items-center justify-between border"
-              >
-                <div className="flex items-center gap-2">
-                  <FileText className="h-4 w-4" />
-                  Supported Schemas
-                </div>
-                <ChevronDown
-                  className={`h-4 w-4 transition-transform ${
-                    isSchemaOpen ? "rotate-180" : ""
-                  }`}
-                />
-              </Button>
-            </CollapsibleTrigger>
-            <CollapsibleContent className="mt-4">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg">Supported Schemas</CardTitle>
-                  <CardDescription>
-                    List of credential schemas supported in this app, including
-                    their unique SAID and target account types.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {SCHEMA_OPTIONS.map((schema) => (
-                    <div
-                      key={schema.said}
-                      className="border-b pb-4 mb-4 last:border-b-0 last:pb-0 last:mb-0"
-                    >
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="font-semibold text-slate-900">
-                          {schema.name}
-                        </span>
-                        <span className="text-xs bg-slate-100 text-slate-700 px-2 py-0.5 rounded">
-                          SAID: {schema.said}
-                        </span>
-                      </div>
-                      <div className="text-slate-600 text-sm mb-1">
-                        {schema.description}
-                      </div>
-                      <div className="text-xs text-slate-500">
-                        Target Types: {schema.targetTypes.join(", ")}
-                      </div>
-                    </div>
-                  ))}
-                </CardContent>
-              </Card>
-            </CollapsibleContent>
-          </Collapsible>
-        </div>
-        <div
-          className="mb-8 max-w-md mx-auto"
-          onMouseEnter={() => setIsConfigHovered(true)}
-          onMouseLeave={() => setIsConfigHovered(false)}
-        >
-          <Collapsible open={isConfigOpen} onOpenChange={setIsConfigOpen}>
-            <CollapsibleTrigger asChild>
-              <Button
-                variant="outline"
-                className="w-full max-w-md mx-auto flex items-center justify-between border"
-              >
-                <div className="flex items-center gap-2">
-                  <Settings className="h-4 w-4" />
-                  Network Environment
-                </div>
-                <span
-                  className={`ml-2 px-3 py-1 rounded-full border text-xs font-semibold ${envColors[env]}`}
+        {/* Row of Dropdowns */}
+        <div className="mb-8 flex flex-col md:flex-row gap-4 max-w-3xl mx-auto">
+          {/* Supported Schemas Dropdown */}
+          <div
+            className="flex-1"
+            onMouseEnter={() => setIsSchemaHovered(true)}
+            onMouseLeave={() => setIsSchemaHovered(false)}
+          >
+            <Collapsible open={isSchemaOpen} onOpenChange={setIsSchemaOpen}>
+              <CollapsibleTrigger asChild>
+                <Button
+                  variant="outline"
+                  className="w-full flex items-center justify-between border"
                 >
-                  {env === "local"
-                    ? "Local"
-                    : env === "test"
-                    ? "Test"
-                    : "Production"}
-                </span>
-                <ChevronDown
-                  className={`h-4 w-4 transition-transform ${
-                    isConfigOpen ? "rotate-180" : ""
-                  }`}
-                />
-              </Button>
-            </CollapsibleTrigger>
-            <CollapsibleContent className="mt-4">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg">Network Environment</CardTitle>
-                  <CardDescription>
-                    Choose which network to use for all client connections
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <label htmlFor="env">Environment</label>
-                    <select
-                      id="env"
-                      className="w-full p-2 border rounded-md"
-                      value={env}
-                      onChange={(e) => setEnv(e.target.value as any)}
-                    >
-                      <option value="local">Local</option>
-                      <option value="test">Test</option>
-                      <option value="prod">Production</option>
-                    </select>
+                  <div className="flex items-center gap-2">
+                    <FileText className="h-4 w-4" />
+                    Supported Schemas
                   </div>
-                  <div className="flex flex-col gap-1 text-xs text-slate-600">
-                    <div>
-                      <b>Admin URL:</b> {config.adminUrl}
-                    </div>
-                    <div>
-                      <b>Boot URL:</b> {config.bootUrl}
-                    </div>
-                    <div>
-                      <b>Schema Server:</b> {config.schemaServer}
-                    </div>
+                  <ChevronDown
+                    className={`h-4 w-4 transition-transform ${
+                      isSchemaOpen ? "rotate-180" : ""
+                    }`}
+                  />
+                </Button>
+              </CollapsibleTrigger>
+              <CollapsibleContent className="mt-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg">Supported Schemas</CardTitle>
+                    <CardDescription>
+                      List of credential schemas supported in this app,
+                      including their unique SAID and target account types.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {SCHEMA_OPTIONS.map((schema) => (
+                      <div
+                        key={schema.said}
+                        className="border-b pb-4 mb-4 last:border-b-0 last:pb-0 last:mb-0"
+                      >
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="font-semibold text-slate-900">
+                            {schema.name}
+                          </span>
+                          <span className="text-xs bg-slate-100 text-slate-700 px-2 py-0.5 rounded">
+                            SAID: {schema.said}
+                          </span>
+                        </div>
+                        <div className="text-slate-600 text-sm mb-1">
+                          {schema.description}
+                        </div>
+                        <div className="text-xs text-slate-500">
+                          Target Types: {schema.targetTypes.join(", ")}
+                        </div>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              </CollapsibleContent>
+            </Collapsible>
+          </div>
+          {/* Network Environment Dropdown */}
+          <div
+            className="flex-1"
+            onMouseEnter={() => setIsConfigHovered(true)}
+            onMouseLeave={() => setIsConfigHovered(false)}
+          >
+            <Collapsible open={isConfigOpen} onOpenChange={setIsConfigOpen}>
+              <CollapsibleTrigger asChild>
+                <Button
+                  variant="outline"
+                  className="w-full flex items-center justify-between border"
+                >
+                  <div className="flex items-center gap-2">
+                    <Settings className="h-4 w-4" />
+                    Network Environment
                   </div>
-                </CardContent>
-              </Card>
-            </CollapsibleContent>
-          </Collapsible>
+                  <span
+                    className={`ml-2 px-3 py-1 rounded-full border text-xs font-semibold ${envColors[env]}`}
+                  >
+                    {env === "local"
+                      ? "Local"
+                      : env === "test"
+                      ? "Test"
+                      : "Production"}
+                  </span>
+                  <ChevronDown
+                    className={`h-4 w-4 transition-transform ${
+                      isConfigOpen ? "rotate-180" : ""
+                    }`}
+                  />
+                </Button>
+              </CollapsibleTrigger>
+              <CollapsibleContent className="mt-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg">
+                      Network Environment
+                    </CardTitle>
+                    <CardDescription>
+                      Choose which network to use for all client connections
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="space-y-2">
+                      <label htmlFor="env">Environment</label>
+                      <select
+                        id="env"
+                        className="w-full p-2 border rounded-md"
+                        value={env}
+                        onChange={(e) => setEnv(e.target.value as any)}
+                      >
+                        <option value="local">Local</option>
+                        <option value="test">Test</option>
+                        <option value="prod">Production</option>
+                      </select>
+                    </div>
+                    <div className="flex flex-col gap-1 text-xs text-slate-600">
+                      <div>
+                        <b>Admin URL:</b> {config.adminUrl}
+                      </div>
+                      <div>
+                        <b>Boot URL:</b> {config.bootUrl}
+                      </div>
+                      <div>
+                        <b>Schema Server:</b> {config.schemaServer}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </CollapsibleContent>
+            </Collapsible>
+          </div>
         </div>
 
         <div className="text-center mb-12">
