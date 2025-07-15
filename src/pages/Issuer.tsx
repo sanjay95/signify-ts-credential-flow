@@ -6,6 +6,9 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+
+import { ContactsSection } from "../components/ContactsSection";
+import { set } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -66,6 +69,8 @@ import {
   AccountConfig,
   getAvailableSchemas,
   PRECONFIGURED_OOBIS,
+  SCHEMAS,
+  LE_RULES,
 } from "@/types/accounts";
 import { FIXED_PASSCODES } from "@/config/environment";
 
@@ -119,6 +124,11 @@ const Issuer = () => {
   const LEIPayload = {
     LEI: "",
   };
+  // Check if this account type has a fixed passcode
+  const hasFixedPasscode = accountType in FIXED_PASSCODES;
+  const fixedPasscode = hasFixedPasscode
+    ? FIXED_PASSCODES[accountType as keyof typeof FIXED_PASSCODES]
+    : undefined;
 
   useEffect(() => {
     if (location.state?.config) {
@@ -318,6 +328,7 @@ const Issuer = () => {
           description: "Target OOBI is required to issue a credential",
           variant: "destructive",
         });
+        setIsProcessing(false);
         return;
       }
 
@@ -330,14 +341,66 @@ const Issuer = () => {
 
       console.log("Schema resolved from OOBI:", schemaOOBI);
 
-      const credentialSaid = await issueCredential(
-        issuerClient,
-        accountData.alias,
-        accountData.registrySaid,
-        selectedSchema,
-        targetOOBI.oobis.split("/")[4] || "", // Extract AID from OOBI
-        credentialData
-      );
+      let credentialSaid;
+      // Call different issue method based on account type
+      switch (accountType) {
+        case "QVI":
+          console.log("Issuing as QVI");
+          console.log("finding QVI credentials");
+          let filter: { [x: string]: any } = { "-s": SCHEMAS.QVI };
+          const QviCredential = await issuerClient
+            .credentials()
+            .list({ filter });
+          console.log("QVI Credentials:", QviCredential);
+          console.log("sadify rules for GLIEF chain");
+
+          const leRules = LE_RULES;
+          console.log("leRules", leRules);
+
+          console.log("sadify edge for GLIEF chain");
+          const edge = {
+            d: "",
+            qvi: {
+              n: QviCredential[0].sad.d,
+              s: QviCredential[0].sad.s,
+            },
+          };
+
+          const leEdge = Saider.saidify(edge)[1];
+          console.log("sadifying done:");
+          console.log("starting issuing QVI credential");
+          credentialSaid = await issueCredential(
+            issuerClient,
+            accountData.alias,
+            accountData.registrySaid,
+            SCHEMAS.LE, //next in chain GLEIF-QVI-LE-OOR-ECR
+            targetOOBI.oobis.split("/")[4] || "", // Extract AID from OOBI
+            credentialData,
+            leEdge,
+            leRules
+          );
+          break;
+        case "GLEIF":
+          credentialSaid = await issueCredential(
+            issuerClient,
+            accountData.alias,
+            accountData.registrySaid,
+            SCHEMAS.QVI, //next in chain GLEIF-QVI-LE-OOR-ECR
+            targetOOBI.oobis.split("/")[4] || "", // Extract AID from OOBI,
+            credentialData
+          );
+          break;
+        default:
+          credentialSaid = await issueCredential(
+            issuerClient,
+            accountData.alias,
+            accountData.registrySaid,
+            "schemaSaid",
+            targetOOBI.oobis.split("/")[4] || "", // Extract AID from OOBI,
+            credentialData
+          );
+          break;
+      }
 
       console.log(
         "Credential issued with SAID:",
@@ -386,12 +449,6 @@ const Issuer = () => {
       description: "OOBI has been copied to clipboard",
     });
   };
-
-  // Check if this account type has a fixed passcode
-  const hasFixedPasscode = accountType in FIXED_PASSCODES;
-  const fixedPasscode = hasFixedPasscode
-    ? FIXED_PASSCODES[accountType as keyof typeof FIXED_PASSCODES]
-    : undefined;
 
   async function handleRevokeCredential(credentialSaid: any): Promise<void> {
     if (!issuerClient || !credentialSaid) return;
@@ -892,6 +949,4 @@ const Issuer = () => {
   );
 };
 
-import { ContactsSection } from "../components/ContactsSection";
-import { set } from "date-fns";
 export default Issuer;
