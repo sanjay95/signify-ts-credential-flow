@@ -219,9 +219,14 @@ const Index = () => {
                           <span className="font-semibold text-slate-900">
                             {schema.name}
                           </span>
-                          <span className="text-xs bg-slate-100 text-slate-700 px-2 py-0.5 rounded">
+                          <a
+                            href={`${config.schemaServer}/oobi/${schema.said}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs bg-slate-100 text-blue-700 px-2 py-0.5 rounded underline hover:text-blue-900"
+                          >
                             SAID: {schema.said}
-                          </span>
+                          </a>
                         </div>
                         <div className="text-slate-600 text-sm mb-1">
                           {schema.description}
