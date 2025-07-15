@@ -20,6 +20,10 @@ import {
   CheckCircle,
   Copy,
   Building,
+  Shield,
+  AlertCircle,
+  RefreshCw,
+  Clock,
 } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
@@ -70,6 +74,8 @@ const Verifier = () => {
   const [isInitializing, setIsInitializing] = useState(true);
   const [verifierClient, setVerifierClient] = useState(null);
   const [contacts, setContacts] = useState<any[]>([]);
+  const [isCheckingIncoming, setIsCheckingIncoming] = useState(false);
+  const [verifications, setVerifications] = useState([]);
   const [accountData, setAccountData] = useState<AccountConfig>({
     type: "verifier",
     alias: "verifierAid",
@@ -90,6 +96,18 @@ const Verifier = () => {
       );
     });
   }, [verifierClient, isConnected, config]);
+
+  // Auto-check for incoming presentations when connected
+  useEffect(() => {
+    if (isConnected && verifierClient) {
+      checkIncomingPresentations();
+      // Set up periodic checking every 30 seconds
+      const interval = setInterval(() => {
+        checkIncomingPresentations();
+      }, 30000);
+      return () => clearInterval(interval);
+    }
+  }, [isConnected, verifierClient]);
 
   const handleConnect = async (userPasscode: string, isReconnect = false) => {
     setIsProcessing(true);
@@ -207,6 +225,103 @@ const Verifier = () => {
     }
   }, [accountData]);
 
+  const checkIncomingPresentations = async () => {
+    if (!verifierClient) return;
+    setIsCheckingIncoming(true);
+    try {
+      console.log("Verifier checking for incoming presentations (offers)...");
+      const grantNotifications = await waitForAndGetNotification(
+        verifierClient,
+        IPEX_GRANT_ROUTE
+      );
+
+      if (grantNotifications.length === 0) {
+        console.log("No new grant notifications found.");
+        return;
+      }
+
+      console.log(
+        `Found ${grantNotifications.length} incoming grant notification(s).`
+      );
+
+      for (const notification of grantNotifications) {
+        // Retrieve the full IPEX grant exchange details.
+
+        const grantExchange = await verifierClient
+          .exchanges()
+          .get(notification.a.d);
+
+        const embeddedACDC = grantExchange.exn.e.acdc;
+        console.log(embeddedACDC, "Embedded ACDC in grant exchange");
+        setVerifications((prev) => [
+          ...prev,
+          {
+            id: notification.i,
+            applySaid: grantExchange.exn.a.p, // SAID of the original apply message
+            status: "received",
+            result: "valid", // Assuming we accept it for demo purposes
+            verifiedDate: new Date().toISOString(),
+            claims: embeddedACDC.a,
+            credentialSaid: embeddedACDC.d,
+          },
+        ]);
+
+        console.log(
+          "Updated verifications with received credential claims:",
+          verifications
+        );
+        // Verifier - Admit Grant
+        const admitResponse = await ipexAdmitGrant(
+          verifierClient,
+          accountData.alias,
+          embeddedACDC?.a.i,
+          notification.a.d
+        );
+        console.log("Verifier admitting credential");
+
+        // Verifier - Mark notification
+        await markNotificationRead(verifierClient, notification.i);
+        console.log("\n✅ Verifier marked notification read");
+
+        const applySaid = grantExchange.exn.a.p; // SAID of the original apply message
+        const offeredAcdc = grantExchange.payload.acdc;
+
+        // // TODO: Full verification logic (check signatures, registry status, etc.)
+        // // For this demo, we'll just accept it and mark as verified.
+        // const isVerified = true; // Placeholder for actual verification result
+
+        // setVerifications((prev) =>
+        //   prev.map((v) =>
+        //     v.applySaid === applySaid
+        //       ? {
+        //           ...v,
+        //           status: "received",
+        //           result: isVerified ? "valid" : "invalid",
+        //           verifiedDate: new Date().toISOString(),
+        //           claims: offeredAcdc.a,
+        //           credentialSaid: offeredAcdc.d,
+        //         }
+        //       : v
+        //   )
+        // );
+        // console.log("verifierData", verifierData);
+
+        // await markNotificationRead(verifierClient, notification.i);
+        toast({
+          title: "Presentation Received",
+          description: `Credential received from ${offeredAcdc.i.substring(
+            0,
+            20
+          )}...`,
+        });
+      }
+    } catch (error) {
+      console.log("No incoming presentations found or error:", error.message);
+    } finally {
+      setIsCheckingIncoming(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-slate-50">
       {/* Header */}
@@ -320,17 +435,99 @@ const Verifier = () => {
             <TabsContent value="verify" className="space-y-6">
               <Card>
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <CheckCircle className="h-5 w-5" />
-                    Verify Credentials
-                  </CardTitle>
-                  <CardDescription>
-                    Request and verify credentials from holders
-                  </CardDescription>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="flex items-center gap-2">
+                        <Clock className="h-5 w-5" />
+                        Credential Verifications
+                      </CardTitle>
+                      <CardDescription>
+                        View and manage all credential verification requests
+                      </CardDescription>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={checkIncomingPresentations}
+                      disabled={isCheckingIncoming}
+                      className="flex items-center gap-2"
+                    >
+                      <RefreshCw
+                        className={`h-4 w-4 ${
+                          isCheckingIncoming ? "animate-spin" : ""
+                        }`}
+                      />
+                      {isCheckingIncoming ? "Checking..." : "Check Now"}
+                    </Button>
+                  </div>
                 </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="text-center py-8 text-slate-500">
-                    Verification functionality coming soon!
+                <CardContent>
+                  <div className="space-y-4">
+                    {verifications.length === 0 ? (
+                      <div className="text-center py-8 text-slate-500">
+                        No credentials in wallet yet
+                        {isCheckingIncoming && (
+                          <div className="mt-2 text-sm">
+                            Waiting for incoming credentials...
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      verifications.map((incomingCred: any, index: number) => (
+                        <div
+                          key={incomingCred.id || index}
+                          className="border rounded-lg p-4 space-y-3"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <div className="text-sm font-mono text-slate-600">
+                                {incomingCred.id.substring(0, 20)}...
+                              </div>
+                              <Badge
+                                variant={
+                                  incomingCred.status === "admitted"
+                                    ? "default"
+                                    : "secondary"
+                                }
+                              >
+                                {incomingCred.status}
+                              </Badge>
+                            </div>
+                            {/* <Button
+                              variant="default"
+                              size="sm"
+                              onClick={() =>
+                                handleAdmitCredential(incomingCred)
+                              }
+                              disabled={
+                                isProcessing ||
+                                incomingCred.status === "admitted"
+                              }
+                            >
+                              {incomingCred.status === "admitted"
+                                ? "Admitted"
+                                : "Admit Credential"}
+                            </Button> */}
+                          </div>
+                          <div className="grid grid-cols-2 gap-4 text-sm">
+                            <div>
+                              <span className="text-slate-500">From:</span>
+                              <div className="font-medium font-mono text-xs">
+                                {incomingCred?.claims?.i.substring(0, 20)}...
+                              </div>
+                            </div>
+                            <div>
+                              <span className="text-slate-500">Received:</span>
+                              <div className="font-medium">
+                                {new Date(
+                                  incomingCred?.verifiedDate
+                                )?.toLocaleString()}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    )}
                   </div>
                 </CardContent>
               </Card>
