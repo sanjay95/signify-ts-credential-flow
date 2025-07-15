@@ -1,50 +1,3 @@
-// CredentialCard component for showing credential summary and details dialog
-
-const CredentialCard = ({ credential }: { credential: any }) => {
-  const [detailsOpen, setDetailsOpen] = React.useState(false);
-  return (
-    <div className="border rounded-lg p-4 space-y-3">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="text-sm font-mono text-slate-600">
-            {credential.said.substring(0, 20)}...
-          </div>
-          <Badge variant="default">{credential.status}</Badge>
-        </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setDetailsOpen(true)}
-        >
-          <Eye className="h-4 w-4 mr-1" /> View Details
-        </Button>
-        <CredentialDetailsViewer
-          open={detailsOpen}
-          onClose={() => setDetailsOpen(false)}
-          credential={credential}
-        />
-      </div>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-        {Object.entries(credential.claims).map(([key, value]) => (
-          <div key={key}>
-            <span className="text-slate-500">{key}:</span>
-            <div className="font-medium">{String(value)}</div>
-          </div>
-        ))}
-        <div>
-          <span className="text-slate-500">Received:</span>
-          <div className="font-medium">
-            {new Date(credential.receivedDate).toLocaleString()}
-          </div>
-        </div>
-        <div>
-          <span className="text-slate-500">Issuer:</span>
-          <div className="font-medium">{String(credential.issuer)}</div>
-        </div>
-      </div>
-    </div>
-  );
-};
 import React, { useState, useEffect } from "react";
 import {
   Card,
@@ -171,6 +124,10 @@ const Holder = () => {
   const [selectedSchema, setSelectedSchema] = useState(
     availableSchemas[0]?.said || ""
   );
+  const [presentationData, setPresentationData] = useState({
+    verifierOOBI: "",
+    selectedCredential: "",
+  });
 
   useEffect(() => {
     const attemptReconnect = async () => {
@@ -532,6 +489,65 @@ const Holder = () => {
     });
   };
 
+  const handlePresentCredential = async () => {
+    setIsProcessing(true);
+    const { verifierOOBI, selectedCredential } = presentationData;
+    // Extract the Verifier AID from the OOBI URL
+    let verifierAid = "";
+    try {
+      const parts = verifierOOBI.split("/oobi/");
+      if (parts.length > 1) {
+        verifierAid = parts[1].split("/")[0];
+      }
+    } catch (e) {
+      verifierAid = "";
+    }
+    if (!verifierAid) {
+      toast({
+        title: "Invalid Verifier OOBI",
+        description: "Please enter a valid Verifier OOBI URL",
+        variant: "destructive",
+      });
+      setIsProcessing(false);
+      return;
+    } else {
+      resolveOOBI(holderClient, verifierOOBI, "verifierContact").catch(
+        (error) => {
+          console.error("Error resolving Verifier OOBI:", error);
+          toast({
+            title: "ERROR",
+            description: "Failed to resolve Verifier OOBI",
+            variant: "destructive",
+          });
+          setIsProcessing(false);
+        }
+      );
+
+      console.log("selectedCredential", selectedCredential);
+      // Holder - get credential (with all its data)
+      const credential = await holderClient
+        .credentials()
+        .get(selectedCredential);
+
+      // Holder - Ipex grant
+      console.log("Granting credential from holder to issuer");
+      const grantResponse = await ipexGrantCredential(
+        holderClient,
+        accountData.alias,
+        verifierAid,
+        credential
+      );
+    }
+    setTimeout(() => {
+      setIsProcessing(false);
+      toast({
+        title: "Credential Presented",
+        description:
+          "ACDC credential has been successfully presented to verifier",
+      });
+    }, 3000);
+  };
+
   // Check if this account type has a fixed passcode
   const hasFixedPasscode = accountType in FIXED_PASSCODES;
   const fixedPasscode = hasFixedPasscode
@@ -671,7 +687,7 @@ const Holder = () => {
         ) : (
           <Tabs defaultValue="request" className="space-y-6">
             <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="request">Request Credentials</TabsTrigger>
+              <TabsTrigger value="request">Credentials Operation</TabsTrigger>
               <TabsTrigger value="wallet">My Wallet</TabsTrigger>
               <TabsTrigger value="settings">Settings</TabsTrigger>
             </TabsList>
@@ -780,6 +796,67 @@ const Holder = () => {
                     {isProcessing
                       ? "Requesting Credential..."
                       : "Request Credential"}
+                  </Button>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Send className="h-5 w-5" />
+                    Present Credential
+                  </CardTitle>
+                  <CardDescription>
+                    Share your credential with a verifier using IPEX protocol
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="verifierOOBI">Verifier OOBI</Label>
+                    <Input
+                      id="verifierOOBI"
+                      value={presentationData.verifierOOBI}
+                      onChange={(e) =>
+                        setPresentationData({
+                          ...presentationData,
+                          verifierOOBI: e.target.value,
+                        })
+                      }
+                      placeholder="Enter verifier's OOBI"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="credential">Select Credential</Label>
+                    <select
+                      className="w-full p-2 border rounded-md"
+                      value={presentationData.selectedCredential}
+                      onChange={(e) =>
+                        setPresentationData({
+                          ...presentationData,
+                          selectedCredential: e.target.value,
+                        })
+                      }
+                    >
+                      <option value="">Choose a credential...</option>
+                      {credentials.map((cred) => (
+                        <option key={cred.id} value={cred.id}>
+                          {cred.claims.eventName} - {cred.claims.accessLevel}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <Button
+                    onClick={handlePresentCredential}
+                    disabled={
+                      isProcessing ||
+                      !presentationData.verifierOOBI ||
+                      !presentationData.selectedCredential
+                    }
+                    className="w-full"
+                  >
+                    <Send className="h-4 w-4 mr-2" />
+                    {isProcessing
+                      ? "Presenting Credential..."
+                      : "Present Credential"}
                   </Button>
                 </CardContent>
               </Card>
@@ -996,3 +1073,49 @@ import { ContactsSection } from "../components/ContactsSection";
 
 import { CredentialDetailsViewer } from "./CredentialDetailsViewer";
 export default Holder;
+
+const CredentialCard = ({ credential }: { credential: any }) => {
+  const [detailsOpen, setDetailsOpen] = React.useState(false);
+  return (
+    <div className="border rounded-lg p-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="text-sm font-mono text-slate-600">
+            {credential.said.substring(0, 20)}...
+          </div>
+          <Badge variant="default">{credential.status}</Badge>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setDetailsOpen(true)}
+        >
+          <Eye className="h-4 w-4 mr-1" /> View Details
+        </Button>
+        <CredentialDetailsViewer
+          open={detailsOpen}
+          onClose={() => setDetailsOpen(false)}
+          credential={credential}
+        />
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+        {Object.entries(credential.claims).map(([key, value]) => (
+          <div key={key}>
+            <span className="text-slate-500">{key}:</span>
+            <div className="font-medium">{String(value)}</div>
+          </div>
+        ))}
+        <div>
+          <span className="text-slate-500">Received:</span>
+          <div className="font-medium">
+            {new Date(credential.receivedDate).toLocaleString()}
+          </div>
+        </div>
+        <div>
+          <span className="text-slate-500">Issuer:</span>
+          <div className="font-medium">{String(credential.issuer)}</div>
+        </div>
+      </div>
+    </div>
+  );
+};

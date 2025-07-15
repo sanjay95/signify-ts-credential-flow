@@ -58,6 +58,7 @@ import {
   AccountConfig,
   getAvailableSchemas,
   PRECONFIGURED_OOBIS,
+  SCHEMA_OPTIONS,
 } from "@/types/accounts";
 
 const Verifier = () => {
@@ -68,6 +69,7 @@ const Verifier = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
   const [verifierClient, setVerifierClient] = useState(null);
+  const [contacts, setContacts] = useState<any[]>([]);
   const [accountData, setAccountData] = useState<AccountConfig>({
     type: "verifier",
     alias: "verifierAid",
@@ -76,17 +78,18 @@ const Verifier = () => {
     oobi: "",
     registrySaid: "",
   });
-  const [config, setConfig] = useState({
-    adminUrl: "https://keria.testnet.gleif.org:3901",
-    bootUrl: "https://keria.testnet.gleif.org:3903",
-    schemaServer: "https://schema.testnet.gleif.org:7723",
-  });
+  const { config } = useConfigContext();
 
   useEffect(() => {
-    if (location.state?.config) {
-      setConfig(location.state.config);
-    }
-  }, [location.state]);
+    if (!verifierClient) return;
+    SCHEMA_OPTIONS?.map((schema) => {
+      resolveOOBI(
+        verifierClient,
+        `${config?.schemaServer}/oobi/${schema?.said}`,
+        schema?.name
+      );
+    });
+  }, [verifierClient, isConnected, config]);
 
   const handleConnect = async (userPasscode: string, isReconnect = false) => {
     setIsProcessing(true);
@@ -386,7 +389,12 @@ const Verifier = () => {
                   {/* Contacts Section */}
                   <div className="mt-8">
                     <h3 className="text-lg font-semibold mb-2">Contacts</h3>
-                    <ContactsSection accountType="verifier" config={config} />
+                    <ContactsSection
+                      client={verifierClient}
+                      contacts={contacts}
+                      setContacts={setContacts}
+                      // filterFn={optionalFilterFn} // e.g. (c) => c.role === 'agent' for Issuer
+                    />
                   </div>
                 </CardContent>
               </Card>
@@ -399,4 +407,5 @@ const Verifier = () => {
 };
 
 import { ContactsSection } from "../components/ContactsSection";
+import { useConfigContext } from "@/context/ConfigContext";
 export default Verifier;

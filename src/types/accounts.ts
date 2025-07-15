@@ -178,3 +178,6 @@ export const credPayload: (schemaSaid: string) => any = (
       return {};
   }
 };
+
+export const sallyOOBI =
+  "https://presentation-handler.testnet.gleif.org:9723/oobi/EG7EWkD1-wYfQGWaCkXGKbDlqf82AIwOu0dt3URWvqAh";
