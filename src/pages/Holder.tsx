@@ -696,6 +696,67 @@ const Holder = () => {
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
+                    <Send className="h-5 w-5" />
+                    Present Credential
+                  </CardTitle>
+                  <CardDescription>
+                    Share your credential with a verifier using IPEX protocol
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="verifierOOBI">Verifier OOBI</Label>
+                    <Input
+                      id="verifierOOBI"
+                      value={presentationData.verifierOOBI}
+                      onChange={(e) =>
+                        setPresentationData({
+                          ...presentationData,
+                          verifierOOBI: e.target.value,
+                        })
+                      }
+                      placeholder="Enter verifier's OOBI"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="credential">Select Credential</Label>
+                    <select
+                      className="w-full p-2 border rounded-md"
+                      value={presentationData.selectedCredential}
+                      onChange={(e) =>
+                        setPresentationData({
+                          ...presentationData,
+                          selectedCredential: e.target.value,
+                        })
+                      }
+                    >
+                      <option value="">Choose a credential...</option>
+                      {credentials.map((cred) => (
+                        <option key={cred.id} value={cred.id}>
+                          {cred.claims.eventName} - {cred.claims.accessLevel}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <Button
+                    onClick={handlePresentCredential}
+                    disabled={
+                      isProcessing ||
+                      !presentationData.verifierOOBI ||
+                      !presentationData.selectedCredential
+                    }
+                    className="w-full"
+                  >
+                    <Send className="h-4 w-4 mr-2" />
+                    {isProcessing
+                      ? "Presenting Credential..."
+                      : "Present Credential"}
+                  </Button>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
                     <Download className="h-5 w-5" />
                     Request New Credential as {accountType}
                   </CardTitle>
@@ -796,67 +857,6 @@ const Holder = () => {
                     {isProcessing
                       ? "Requesting Credential..."
                       : "Request Credential"}
-                  </Button>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Send className="h-5 w-5" />
-                    Present Credential
-                  </CardTitle>
-                  <CardDescription>
-                    Share your credential with a verifier using IPEX protocol
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="verifierOOBI">Verifier OOBI</Label>
-                    <Input
-                      id="verifierOOBI"
-                      value={presentationData.verifierOOBI}
-                      onChange={(e) =>
-                        setPresentationData({
-                          ...presentationData,
-                          verifierOOBI: e.target.value,
-                        })
-                      }
-                      placeholder="Enter verifier's OOBI"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="credential">Select Credential</Label>
-                    <select
-                      className="w-full p-2 border rounded-md"
-                      value={presentationData.selectedCredential}
-                      onChange={(e) =>
-                        setPresentationData({
-                          ...presentationData,
-                          selectedCredential: e.target.value,
-                        })
-                      }
-                    >
-                      <option value="">Choose a credential...</option>
-                      {credentials.map((cred) => (
-                        <option key={cred.id} value={cred.id}>
-                          {cred.claims.eventName} - {cred.claims.accessLevel}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <Button
-                    onClick={handlePresentCredential}
-                    disabled={
-                      isProcessing ||
-                      !presentationData.verifierOOBI ||
-                      !presentationData.selectedCredential
-                    }
-                    className="w-full"
-                  >
-                    <Send className="h-4 w-4 mr-2" />
-                    {isProcessing
-                      ? "Presenting Credential..."
-                      : "Present Credential"}
                   </Button>
                 </CardContent>
               </Card>
