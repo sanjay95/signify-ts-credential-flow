@@ -180,10 +180,9 @@ const Issuer = () => {
     const loadIssuedCredentials = async () => {
       if (!issuerClient || !isChecking) return;
       try {
-        const credList = await issuerClient
-          .credentials()
-          .list()
-          .filter((cred) => cred.sad.a.i !== accountData.aid);
+        const credList = (await issuerClient.credentials().list()).filter(
+          (cred: any) => cred.sad.a.i !== accountData.aid
+        ); // Filter out credentials with accounts AID, display only issued credentials, not received
         console.log("Loaded issued credentials:", credList);
         setCredentials(credList);
       } catch (error) {
