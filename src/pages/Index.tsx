@@ -33,15 +33,27 @@ import { useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { useConfigContext } from "@/context/ConfigContext";
 import { AccountTypeSelector } from "@/components/AccountTypeSelector";
-import { AccountType } from "@/types/accounts";
+import { AccountType, SCHEMA_OPTIONS } from "@/types/accounts";
 
 const Index = () => {
   const navigate = useNavigate();
   const [isConfigOpen, setIsConfigOpen] = useState(false);
   const [isConfigHovered, setIsConfigHovered] = useState(false);
   const [showAccountTypeDialog, setShowAccountTypeDialog] = useState(false);
-  const [selectedRole, setSelectedRole] = useState<'issuer' | 'holder' | null>(null);
-  const [selectedAccountType, setSelectedAccountType] = useState<AccountType | null>(null);
+  const [selectedRole, setSelectedRole] = useState<"issuer" | "holder" | null>(
+    null
+  );
+  const [selectedAccountType, setSelectedAccountType] =
+    useState<AccountType | null>(null);
+
+  const [isSchemaOpen, setIsSchemaOpen] = useState(false);
+  const [isSchemaHovered, setIsSchemaHovered] = useState(false);
+  useEffect(() => {
+    if (isSchemaOpen && !isSchemaHovered) {
+      const timer = setTimeout(() => setIsSchemaOpen(false), 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [isSchemaOpen, isSchemaHovered]);
 
   useEffect(() => {
     if (isConfigOpen && !isConfigHovered) {
@@ -52,7 +64,7 @@ const Index = () => {
 
   const { config, env, setEnv } = useConfigContext();
 
-  const handleRoleSelection = (role: 'issuer' | 'holder') => {
+  const handleRoleSelection = (role: "issuer" | "holder") => {
     setSelectedRole(role);
     setShowAccountTypeDialog(true);
   };
@@ -63,17 +75,17 @@ const Index = () => {
 
   const handleProceed = () => {
     if (selectedRole && selectedAccountType) {
-      navigate(`/${selectedRole}`, { 
-        state: { 
+      navigate(`/${selectedRole}`, {
+        state: {
           config,
-          accountType: selectedAccountType 
-        } 
+          accountType: selectedAccountType,
+        },
       });
     }
   };
 
   const handleVerifierNavigation = () => {
-    navigate('/verifier', { state: { config } });
+    navigate("/verifier", { state: { config } });
   };
 
   const roles = [
@@ -89,7 +101,7 @@ const Index = () => {
         "Manage Revocation",
         "IPEX Grant Operations",
       ],
-      action: () => handleRoleSelection('issuer'),
+      action: () => handleRoleSelection("issuer"),
     },
     {
       id: "holder",
@@ -103,7 +115,7 @@ const Index = () => {
         "Present to Verifiers",
         "IPEX Apply/Offer",
       ],
-      action: () => handleRoleSelection('holder'),
+      action: () => handleRoleSelection("holder"),
     },
     {
       id: "verifier",
@@ -163,6 +175,65 @@ const Index = () => {
       </div>
 
       <div className="container mx-auto px-6 py-12">
+        {/* Supported Schemas Dropdown */}
+        <div
+          className="mb-8 max-w-md mx-auto"
+          onMouseEnter={() => setIsSchemaHovered(true)}
+          onMouseLeave={() => setIsSchemaHovered(false)}
+        >
+          <Collapsible open={isSchemaOpen} onOpenChange={setIsSchemaOpen}>
+            <CollapsibleTrigger asChild>
+              <Button
+                variant="outline"
+                className="w-full max-w-md mx-auto flex items-center justify-between border"
+              >
+                <div className="flex items-center gap-2">
+                  <FileText className="h-4 w-4" />
+                  Supported Schemas
+                </div>
+                <ChevronDown
+                  className={`h-4 w-4 transition-transform ${
+                    isSchemaOpen ? "rotate-180" : ""
+                  }`}
+                />
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="mt-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg">Supported Schemas</CardTitle>
+                  <CardDescription>
+                    List of credential schemas supported in this app, including
+                    their unique SAID and target account types.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {SCHEMA_OPTIONS.map((schema) => (
+                    <div
+                      key={schema.said}
+                      className="border-b pb-4 mb-4 last:border-b-0 last:pb-0 last:mb-0"
+                    >
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="font-semibold text-slate-900">
+                          {schema.name}
+                        </span>
+                        <span className="text-xs bg-slate-100 text-slate-700 px-2 py-0.5 rounded">
+                          SAID: {schema.said}
+                        </span>
+                      </div>
+                      <div className="text-slate-600 text-sm mb-1">
+                        {schema.description}
+                      </div>
+                      <div className="text-xs text-slate-500">
+                        Target Types: {schema.targetTypes.join(", ")}
+                      </div>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            </CollapsibleContent>
+          </Collapsible>
+        </div>
         <div
           className="mb-8 max-w-md mx-auto"
           onMouseEnter={() => setIsConfigHovered(true)}
@@ -291,25 +362,30 @@ const Index = () => {
           })}
         </div>
 
-        <Dialog open={showAccountTypeDialog} onOpenChange={setShowAccountTypeDialog}>
+        <Dialog
+          open={showAccountTypeDialog}
+          onOpenChange={setShowAccountTypeDialog}
+        >
           <DialogContent className="max-w-4xl">
             <DialogHeader>
               <DialogTitle>
-                Select Account Type for {selectedRole?.charAt(0).toUpperCase()}{selectedRole?.slice(1)}
+                Select Account Type for {selectedRole?.charAt(0).toUpperCase()}
+                {selectedRole?.slice(1)}
               </DialogTitle>
               <DialogDescription>
-                Choose the type of entity you represent to access the appropriate {selectedRole} interface
+                Choose the type of entity you represent to access the
+                appropriate {selectedRole} interface
               </DialogDescription>
             </DialogHeader>
-            
+
             <AccountTypeSelector
               onSelect={handleAccountTypeSelection}
               selectedType={selectedAccountType}
             />
-            
+
             <div className="flex justify-end gap-3 pt-4">
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 onClick={() => {
                   setShowAccountTypeDialog(false);
                   setSelectedAccountType(null);
@@ -318,11 +394,10 @@ const Index = () => {
               >
                 Cancel
               </Button>
-              <Button 
-                onClick={handleProceed}
-                disabled={!selectedAccountType}
-              >
-                Continue as {selectedAccountType} {selectedRole?.charAt(0).toUpperCase()}{selectedRole?.slice(1)}
+              <Button onClick={handleProceed} disabled={!selectedAccountType}>
+                Continue as {selectedAccountType}{" "}
+                {selectedRole?.charAt(0).toUpperCase()}
+                {selectedRole?.slice(1)}
               </Button>
             </div>
           </DialogContent>
