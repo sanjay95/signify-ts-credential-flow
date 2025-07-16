@@ -77,8 +77,10 @@ import {
   Config as ConfigContext,
   useConfigContext,
 } from "@/context/ConfigContext";
+import { useSearchParams } from "react-router-dom";
 
 const Holder = () => {
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const location = useLocation();
   const { toast } = useToast();
@@ -128,6 +130,17 @@ const Holder = () => {
     verifierOOBI: "",
     selectedCredential: "",
   });
+  const [defaultTab, setDefaultTab] = useState("credentials");
+
+  // On mount, check for verifiersOOBI in query params
+  useEffect(() => {
+    const oobi =
+      searchParams.get("verifiersOOBI") || searchParams.get("verifierOOBI");
+    if (oobi) {
+      setDefaultTab("present");
+      setPresentationData((prev) => ({ ...prev, verifierOOBI: oobi }));
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     const attemptReconnect = async () => {
